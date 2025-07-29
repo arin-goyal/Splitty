@@ -6,5 +6,8 @@ export default defineConfig({
   server: {
     host: '0.0.0.0', // allows access from your LAN
     port: 5173,       // default Vite port
+    hmr: {
+      host: 'splitty.local'
+    }
   },
 })

@@ -69,7 +69,7 @@ const SignIn = () => {
       navigate('/Friends');
     } catch (error: any) {
       console.error('Google Sign-In Error:', error);
-      alert('Failed to sign in with Google');
+      alert(`Google Sign-In Error: ${error.message}`);
     }
   };
 

@@ -4,7 +4,7 @@ import FriendCard from "../components/ui/Friends/FriendCard";
 import FriendRequestCard from "../components/ui/Friends/FriendRequestCard";
 import { auth, db } from "../firebase/firebaseConfig";
 import { doc, getDoc, updateDoc, arrayUnion, getDocs, collection, query, where, onSnapshot } from "firebase/firestore";
-
+import { onAuthStateChanged } from "firebase/auth";
 
 
 const Friends = () => {
@@ -12,12 +12,30 @@ const Friends = () => {
   const [outgoingRequests, setOutgoingRequests] = useState<string[]>([]);
   const [friends, setFriends] = useState<string[]>([]);
 
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setUserEmail(user.email);
+      }
+    });
+
+    return () => unsubscribe(); // clean up listener
+  }, []);
+
+
   const handleAddFriend = async () =>{
     const email = prompt("Enter the email:");
     if (!email) return;
 
     const currentUser = auth.currentUser;
     if (!currentUser) return;
+
+    if (userEmail && email.trim().toLowerCase() === userEmail.toLowerCase()) {
+      alert("You cannot send a friend request to yourself!");
+      return;
+    }
 
     try{
       const q = query(collection(db, "users"), where("email", "==", email));
@@ -83,6 +101,10 @@ const Friends = () => {
 
   return (
     <div className="min-h-screen p-6 bg-background text-white">
+      <div className="text-sm text-neutral-600 mb-2">
+        Logged in as: <span className="font-medium">{userEmail}</span>
+      </div>
+
       <h2 className="text-2xl font-bold mb-4">Friends</h2>
 
       <section className="mb-6">
