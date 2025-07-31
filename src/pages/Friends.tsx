@@ -3,17 +3,22 @@ import { useState, useEffect } from "react";
 import FriendCard from "../components/ui/Friends/FriendCard";
 import FriendRequestCard from "../components/ui/Friends/FriendRequestCard";
 import { auth, db } from "../firebase/firebaseConfig";
-import { doc, getDoc, updateDoc, arrayUnion, getDocs, collection, query, where, onSnapshot } from "firebase/firestore";
+import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, getDocs, collection, query, where, onSnapshot } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 
+type UserInfo = {
+  uid: string;
+  name: string;
+};
 
 const Friends = () => {
-  const [incomingRequests, setIncomingRequests] = useState<string[]>([]);
-  const [outgoingRequests, setOutgoingRequests] = useState<string[]>([]);
-  const [friends, setFriends] = useState<string[]>([]);
+  const [incomingRequests, setIncomingRequests] = useState<UserInfo[]>([]);
+  const [outgoingRequests, setOutgoingRequests] = useState<UserInfo[]>([]);
+  const [friends, setFriends] = useState<UserInfo[]>([]);
 
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
+  // getting the user's email id
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
@@ -24,7 +29,7 @@ const Friends = () => {
     return () => unsubscribe(); // clean up listener
   }, []);
 
-
+  // Add friend function
   const handleAddFriend = async () =>{
     const email = prompt("Enter the email:");
     if (!email) return;
@@ -64,40 +69,142 @@ const Friends = () => {
     }
   };
 
-  useEffect(() => {
+  // Accept friend request function
+  const handleAccept = async (senderUID: string) => {
     const currentUser = auth.currentUser;
     if (!currentUser) return;
 
-    const userRef = doc(db, "users", currentUser.uid);
+    const currentUserRef = doc(db, "users", currentUser.uid);
+    const senderRef = doc(db, "users", senderUID);
 
-    const unsubscribe = onSnapshot(userRef, async (snapshot) => {
-      const data = snapshot.data();
-      if (!data) return;
+    try {
+      // Add each other as friends
+      await updateDoc(currentUserRef, {
+        friends: arrayUnion(senderUID),
+        "friendRequests.incoming": arrayRemove(senderUID),
+      });
 
-      // Set raw UIDs
-      const incoming = data.friendRequests?.incoming || [];
-      const outgoing = data.friendRequests?.outgoing || [];
-      const friendList = data.friends || [];
+      await updateDoc(senderRef, {
+        friends: arrayUnion(currentUser.uid),
+        "friendRequests.outgoing": arrayRemove(currentUser.uid),
+      });
 
-      // Convert UIDs to names
-      const getNames = async (uids: string[]) => {
-        const names: string[] = [];
-        for (const uid of uids) {
-          const userSnap = await getDoc(doc(db, "users", uid));
-          if (userSnap.exists()) {
-            names.push(userSnap.data().name || "Unknown");
+      alert("Friend request accepted!");
+    } catch (error) {
+      console.error("Error accepting friend request:", error);
+    }
+  };
+
+  // Reject friend request
+  const handleReject = async (senderUID: string) => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
+
+    const currentUserRef = doc(db, "users", currentUser.uid);
+    const senderRef = doc(db, "users", senderUID);
+
+    try {
+      await updateDoc(currentUserRef, {
+        "friendRequests.incoming": arrayRemove(senderUID),
+      });
+
+      await updateDoc(senderRef, {
+        "friendRequests.outgoing": arrayRemove(currentUser.uid),
+      });
+
+      alert("Friend request rejected.");
+    } catch (error) {
+      console.error("Error rejecting friend request:", error);
+    }
+  };
+
+  // Cancel sent friend request
+  const handleCancel = async (targetUID: string) => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
+
+    const currentUserRef = doc(db, "users", currentUser.uid);
+    const targetUserRef = doc(db, "users", targetUID);
+
+    try {
+      await updateDoc(currentUserRef, {
+        "friendRequests.outgoing": arrayRemove(targetUID),
+      });
+
+      await updateDoc(targetUserRef, {
+        "friendRequests.incoming": arrayRemove(currentUser.uid),
+      });
+
+      alert("Friend request canceled.");
+    } catch (error) {
+      console.error("Error canceling friend request:", error);
+    }
+  };
+
+  const removeFriend = async (friendUid: string) => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      console.error("User not logged in");
+      return;
+    }
+
+    const currentUserRef = doc(db, "users", currentUser.uid);
+    const friendRef = doc(db, "users", friendUid);
+
+    try {
+      // Remove from both users' friends list
+      await updateDoc(currentUserRef, {
+        friends: arrayRemove(friendUid),
+      });
+
+      await updateDoc(friendRef, {
+        friends: arrayRemove(currentUser.uid),
+      });
+
+      console.log("Friend removed successfully");
+    } catch (err) {
+      console.error("Error removing friend:", err);
+    }
+  };
+
+  useEffect(() => {
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (!user) return;
+
+      const userRef = doc(db, "users", user.uid);
+
+      const unsubscribeSnapshot = onSnapshot(userRef, async (snapshot) => {
+        const data = snapshot.data();
+        if (!data) return;
+
+        const incoming = data.friendRequests?.incoming || [];
+        const outgoing = data.friendRequests?.outgoing || [];
+        const friendList = data.friends || [];
+
+        const getUserInfoList = async (uids: string[]) => {
+          const users: UserInfo[] = [];
+          for (const uid of uids) {
+            const userSnap = await getDoc(doc(db, "users", uid));
+            if (userSnap.exists()) {
+              users.push({uid, name: userSnap.data().name || "Unknown"});
+            }
           }
-        }
-        return names;
-      };
+          return users;
+        };
 
-      setIncomingRequests(await getNames(incoming));
-      setOutgoingRequests(await getNames(outgoing));
-      setFriends(await getNames(friendList));
+        setIncomingRequests(await getUserInfoList(incoming));
+        setOutgoingRequests(await getUserInfoList(outgoing));
+        setFriends(await getUserInfoList(friendList));
+      });
+
+      // Clean up snapshot listener
+      return () => unsubscribeSnapshot();
     });
 
-    return () => unsubscribe(); // Cleanup on unmount
+    // Clean up auth listener
+    return () => unsubscribeAuth();
   }, []);
+
 
   return (
     <div className="min-h-screen p-6 bg-background text-white">
@@ -110,21 +217,21 @@ const Friends = () => {
       <section className="mb-6">
         <h3 className="text-lg font-semibold mb-2">Friend Requests</h3>
         <div className="flex flex-col gap-2">
-          {incomingRequests.map((name) => (
+          {incomingRequests.map((user) => (
             <FriendRequestCard
-              key={name}
-              name={name}
+              key={user.uid}
+              name={user.name}
               type="incoming"
-              onAccept={() => alert(`Accepted ${name}`)}
-              onReject={() => alert(`Rejected ${name}`)}
+              onAccept={() => handleAccept(user.uid)}
+              onReject={() => handleReject(user.uid)}
             />
           ))}
-          {outgoingRequests.map((name) => (
+          {outgoingRequests.map((user) => (
             <FriendRequestCard
-              key={name}
-              name={name}
+              key={user.uid}
+              name={user.name}
               type="outgoing"
-              onCancel={() => alert(`Canceled request to ${name}`)}
+              onCancel={() => handleCancel(user.uid)}
             />
           ))}
         </div>
@@ -133,8 +240,11 @@ const Friends = () => {
       <section className="mb-6">
         <h3 className="text-lg font-semibold mb-2">Your Friends</h3>
         <div className="flex flex-col gap-2">
-          {friends.map((name) => (
-            <FriendCard key={name} name={name} onRemove={() => alert(`Removed ${name}`)} />
+          {friends.map((user) => (
+            <FriendCard 
+              key={user.uid} 
+              name={user.name} 
+              onRemove={() => removeFriend(user.uid)} />
           ))}
         </div>
       </section>
