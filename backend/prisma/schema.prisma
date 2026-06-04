@@ -1,0 +1,164 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String     @id @default(cuid())
+  email     String     @unique
+  password  String
+  name      String
+  phone     String?
+  defaultCurrency String @default("INR")
+  avatar    String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  expenses  Expense[]
+  groups    Group[]
+  groupMemberships GroupMember[]
+  chats     ChatMessage[]
+
+  @@index([email])
+}
+
+model Category {
+  id        String     @id @default(cuid())
+  name      String     @unique
+  icon      String?
+  color     String?
+
+  expenses  Expense[]
+}
+
+model Expense {
+  id          String     @id @default(cuid())
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  amount      Float
+  currency    String     @default("INR")
+  category    Category   @relation(fields: [categoryId], references: [id])
+  categoryId  String
+  
+  description String?
+  merchant    String?
+  date        DateTime
+  paymentMethod String?
+  
+  receiptUrl  String?
+  
+  tags        String[]   @default([])
+  
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  groupExpense GroupExpense?
+  
+  @@index([userId])
+  @@index([date])
+  @@index([categoryId])
+}
+
+model Group {
+  id        String     @id @default(cuid())
+  name      String
+  icon      String?
+  createdBy String
+  creator   User       @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+  
+  members   GroupMember[]
+  expenses  GroupExpense[]
+  
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model GroupMember {
+  id        String     @id @default(cuid())
+  groupId   String
+  group     Group      @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  role      String     @default("member")
+  
+  @@unique([groupId, userId])
+}
+
+model GroupExpense {
+  id          String     @id @default(cuid())
+  groupId     String
+  group       Group      @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  
+  expenseId   String     @unique
+  expense     Expense    @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  
+  paidByUserId String
+  
+  splits      Split[]
+  
+  createdAt   DateTime   @default(now())
+}
+
+model Split {
+  id              String     @id @default(cuid())
+  groupExpenseId  String
+  groupExpense    GroupExpense @relation(fields: [groupExpenseId], references: [id], onDelete: Cascade)
+  
+  personId   String
+  amount     Float
+  settled    Boolean   @default(false)
+  settledAt  DateTime?
+  
+  @@unique([groupExpenseId, personId])
+}
+
+model ChatMessage {
+  id        String     @id @default(cuid())
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  role      String
+  content   String
+  
+  createdAt DateTime   @default(now())
+  
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model Budget {
+  id        String     @id @default(cuid())
+  userId    String
+  category  String
+  monthlyLimit Float
+  month     String
+  
+  @@unique([userId, category, month])
+}
+
+model RecurringExpense {
+  id        String     @id @default(cuid())
+  userId    String
+  
+  amount    Float
+  currency  String
+  category  String
+  description String?
+  
+  frequency String
+  startDate DateTime
+  endDate   DateTime?
+  nextDue   DateTime
+  
+  active    Boolean    @default(true)
+  
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
