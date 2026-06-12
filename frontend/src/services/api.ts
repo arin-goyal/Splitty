@@ -1,7 +1,9 @@
 import axios from 'axios';
 import { useAuthStore } from '../store/authStore';
 
-const API_URL = 'http://localhost:3000/api';
+// NOTE: Physical devices cannot reach 'localhost' — it resolves to the device itself.
+// Use your machine's LAN IP so both the PC and phone can connect to the backend.
+const API_URL = 'http://192.168.29.29:3000/api';
 
 const api = axios.create({
   baseURL: API_URL,

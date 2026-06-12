@@ -1,16 +1,19 @@
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { ActivityIndicator, View, StyleSheet, Text } from 'react-native';
+import { ActivityIndicator, View, StyleSheet } from 'react-native';
 
 import { useAuthStore } from '../store/authStore';
+import { COLORS } from '../theme/colors';
+import CustomTabBar from '../components/CustomTabBar';
 
 // Screens
 import LoginScreen from '../screens/Auth/LoginScreen';
 import SignupScreen from '../screens/Auth/SignupScreen';
 import DashboardScreen from '../screens/Main/DashboardScreen';
 import ExpensesScreen from '../screens/Main/ExpensesScreen';
+import AiChatScreen from '../screens/Main/AiChatScreen';
 import GroupsScreen from '../screens/Main/GroupsScreen';
 import ProfileScreen from '../screens/Main/ProfileScreen';
 import AddExpenseScreen from '../screens/Detail/AddExpenseScreen';
@@ -26,6 +29,7 @@ export type AuthStackParamList = {
 export type MainTabParamList = {
   Dashboard: undefined;
   Expenses: undefined;
+  AI: undefined;
   Groups: undefined;
   Profile: undefined;
 };
@@ -55,45 +59,30 @@ const getTabEmoji = (routeName: string) => {
 const MainTabNavigator = () => {
   return (
     <MainTab.Navigator
-      screenOptions={({ route }) => ({
-        tabBarIcon: ({ focused }) => {
-          // Use unicode characters with opacity adjustments
-          return (
-            <Text style={{ fontSize: 20, opacity: focused ? 1 : 0.4 }}>
-              {getTabEmoji(route.name)}
-            </Text>
-          );
-        },
-        tabBarActiveTintColor: '#007AFF',
-        tabBarInactiveTintColor: '#8E8E93',
-        tabBarStyle: {
-          backgroundColor: '#F5F5F5',
-          borderTopWidth: 1,
-          borderTopColor: '#E5E5EA',
-          height: 60,
-          paddingBottom: 10,
-          paddingTop: 10,
-        },
-        headerStyle: {
-          backgroundColor: '#FFFFFF',
-          elevation: 0,
-          shadowOpacity: 0,
-          borderBottomWidth: 1,
-          borderBottomColor: '#E5E5EA',
-        },
-        headerTitleStyle: {
-          fontWeight: '600',
-          fontSize: 18,
-          color: '#000000',
-        },
-      })}
+      tabBar={(props) => <CustomTabBar {...props} />}
+      screenOptions={{
+        headerShown: false,
+      }}
     >
       <MainTab.Screen name="Dashboard" component={DashboardScreen} options={{ title: 'Home' }} />
       <MainTab.Screen name="Expenses" component={ExpensesScreen} options={{ title: 'My Expenses' }} />
+      <MainTab.Screen name="AI" component={AiChatScreen} options={{ title: 'AI Chat' }} />
       <MainTab.Screen name="Groups" component={GroupsScreen} options={{ title: 'Groups' }} />
       <MainTab.Screen name="Profile" component={ProfileScreen} options={{ title: 'Profile' }} />
     </MainTab.Navigator>
   );
+};
+
+const SplittyTheme = {
+  ...DefaultTheme,
+  colors: {
+    ...DefaultTheme.colors,
+    primary: COLORS.primary,
+    background: COLORS.background,
+    card: COLORS.surface,
+    text: COLORS.text,
+    border: COLORS.border,
+  },
 };
 
 export default function AppNavigator() {
@@ -102,25 +91,17 @@ export default function AppNavigator() {
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
+        <ActivityIndicator size="large" color={COLORS.primary} />
       </View>
     );
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer theme={SplittyTheme}>
       {isAuthenticated ? (
         <RootStack.Navigator
           screenOptions={{
-            headerStyle: {
-              backgroundColor: '#FFFFFF',
-            },
-            headerTintColor: '#007AFF',
-            headerTitleStyle: {
-              fontWeight: '600',
-              color: '#000000',
-            },
-            headerShadowVisible: false,
+            headerShown: false,
           }}
         >
           <RootStack.Screen 
@@ -163,6 +144,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.background,
   },
 });

@@ -29,6 +29,16 @@ This project is structured as a monorepo consisting of two primary components:
 * JWT auto-login on startup (persisted across sessions).
 * Auto-logout on token expiration (intercepted 401 errors).
 
+### 👥 Friend System & Requests ✉️
+* Search and add friends by their email ID.
+* Interactive real-time Heart Badge on the header for pending incoming requests.
+* Actionable Friend Requests panel (Accept / Deny requests).
+* Silent background polling optimization to prevent loading state flickers.
+* High-fidelity glassmorphic background blur overlays for modal cards.
+
+### 🤖 AI Chat Integration 💬
+* Dedicated AI Chat Screen to serve as a platform for future AI expense insights and conversational bill tracking.
+
 ### 💳 Personal Expenses
 * Create, read, update, and delete personal transactions.
 * Full details display showing category badge, merchant, description, date, and tags.

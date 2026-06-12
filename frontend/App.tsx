@@ -4,8 +4,10 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import AppNavigator from './src/navigation/AppNavigator';
+import GlobalModals from './src/components/GlobalModals';
 import { useAuthStore } from './src/store/authStore';
 import api from './src/services/api';
+import { COLORS } from './src/theme/colors';
 
 export default function App() {
   const { token, setUser, logout } = useAuthStore();
@@ -35,7 +37,7 @@ export default function App() {
   if (!appReady) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
+        <ActivityIndicator size="large" color={COLORS.primary} />
       </View>
     );
   }
@@ -43,7 +45,8 @@ export default function App() {
   return (
     <SafeAreaProvider style={{ flex: 1 }}>
       <AppNavigator />
-      <StatusBar style="dark" />
+      <GlobalModals />
+      <StatusBar style="light" />
     </SafeAreaProvider>
   );
 }
@@ -53,6 +56,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.background,
   },
 });
