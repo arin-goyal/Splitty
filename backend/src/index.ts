@@ -6,6 +6,7 @@ import expenseRoutes from './routes/expenses';
 import groupRoutes from './routes/groups';
 import groupExpenseRoutes from './routes/group-expenses';
 import friendRoutes from './routes/friends';
+import budgetsRoutes from './routes/budgets';
 
 dotenv.config();
 
@@ -20,6 +21,7 @@ app.use('/api/expenses', expenseRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/group-expenses', groupExpenseRoutes);
 app.use('/api/friends', friendRoutes);
+app.use('/api/budgets', budgetsRoutes);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date() });

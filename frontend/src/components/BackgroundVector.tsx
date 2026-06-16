@@ -1,12 +1,31 @@
-import React from 'react';
-import { StyleSheet, View, Dimensions } from 'react-native';
+import React, { useRef } from 'react';
+import { StyleSheet, Dimensions, Animated } from 'react-native';
 import Svg, { G, Path } from 'react-native-svg';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
-export default function BackgroundVector() {
+interface BackgroundVectorProps {
+  scrollY?: Animated.Value;
+}
+
+export default function BackgroundVector({ scrollY }: BackgroundVectorProps) {
+  const defaultScrollY = useRef(new Animated.Value(0)).current;
+  const activeScrollY = scrollY || defaultScrollY;
+
+  const translateY = activeScrollY.interpolate({
+    inputRange: [0, 1000],
+    outputRange: [0, -150], // Parallax: scroll at 15% rate of foreground elements
+    extrapolate: 'clamp',
+  });
+
   return (
-    <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+    <Animated.View 
+      style={[
+        StyleSheet.absoluteFillObject,
+        { transform: [{ translateY }] }
+      ]} 
+      pointerEvents="none"
+    >
       <Svg 
         width={screenWidth} 
         height={screenHeight} 
@@ -186,7 +205,7 @@ export default function BackgroundVector() {
           <Path d="M380.541 951.469C381.046 951.469 381.455 951.063 381.455 950.563C381.455 950.062 381.046 949.657 380.541 949.657C380.035 949.657 379.626 950.062 379.626 950.563C379.626 951.063 380.035 951.469 380.541 951.469Z" fill="#DBE8E3"/>
         </G>
       </Svg>
-    </View>
+    </Animated.View>
   );
 }
 

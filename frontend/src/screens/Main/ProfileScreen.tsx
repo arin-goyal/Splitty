@@ -1,7 +1,8 @@
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useAuthStore } from '../../store/authStore';
 import ScreenWrapper from '../../components/ScreenWrapper';
+import Button from '../../components/Button';
 
 export default function ProfileScreen() {
   const { logout } = useAuthStore();
@@ -9,9 +10,15 @@ export default function ProfileScreen() {
   return (
     <ScreenWrapper>
       <View style={styles.content}>
-        <TouchableOpacity style={styles.button} onPress={logout}>
-          <Text style={styles.buttonText}>Log Out</Text>
-        </TouchableOpacity>
+        <Button
+          variant="filled"
+          color="#B1CDC1"
+          textColor="#060D10"
+          title="Log Out"
+          style={styles.button}
+          textStyle={styles.buttonText}
+          onPress={logout}
+        />
       </View>
     </ScreenWrapper>
   );

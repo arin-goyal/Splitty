@@ -8,6 +8,6 @@ export const COLORS = {
   text: '#B1CDC1',           // Main text (Off-white)
   textSecondary: '#8E9A9D',  // Muted text (Gray-blue)
   error: '#FF3B30',          // Red
-  success: '#34C759',        // Green
+  success: '#00EE87',        // Green
   inputBg: '#111E24',        // Field input background
 };

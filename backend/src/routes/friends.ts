@@ -191,4 +191,36 @@ router.get('/', async (req: AuthRequest, res: Response) => {
   }
 });
 
+// Remove a friend (Delete accepted FriendRequest)
+router.delete('/:friendId', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId!;
+    const { friendId } = req.params;
+
+    if (!friendId || typeof friendId !== 'string') {
+      return res.status(400).json({ error: 'Friend ID is required and must be a string' });
+    }
+
+    // Delete friendship where status is accepted and sender/receiver matches
+    const result = await prisma.friendRequest.deleteMany({
+      where: {
+        status: 'accepted',
+        OR: [
+          { senderId: userId, receiverId: friendId },
+          { senderId: friendId, receiverId: userId },
+        ],
+      },
+    });
+
+    if (result.count === 0) {
+      return res.status(404).json({ error: 'Friendship not found or not accepted' });
+    }
+
+    res.json({ message: 'Friend removed successfully' });
+  } catch (error) {
+    console.error('Error removing friend:', error);
+    res.status(500).json({ error: 'Failed to remove friend' });
+  }
+});
+
 export default router;

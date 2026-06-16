@@ -6,6 +6,7 @@ import {
   Image,
   Text,
   Animated,
+  Platform,
 } from 'react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -224,19 +225,28 @@ export default function CustomTabBar({ state, navigation }: BottomTabBarProps) {
   // Measure the inner capsule width so we can calculate pill width per tab
   const [capsuleWidth, setCapsuleWidth] = useState(0);
 
+  // Filter out AddExpense from the visible tab buttons
+  const visibleRoutes = state.routes.filter((route) => route.name !== 'AddExpense');
+  const currentRouteName = state.routes[state.index]?.name;
+  const isAddExpenseActive = currentRouteName === 'AddExpense';
+  
+  // Calculate activeVisibleIndex among visible tabs
+  const activeTabName = isAddExpenseActive ? null : currentRouteName;
+  const activeVisibleIndex = visibleRoutes.findIndex((r) => r.name === activeTabName);
+
   // Animated value tracks the active tab index (fractional during animation)
-  const pillAnim = useRef(new Animated.Value(state.index)).current;
+  const pillAnim = useRef(new Animated.Value(activeVisibleIndex >= 0 ? activeVisibleIndex : -1)).current;
 
   useEffect(() => {
     Animated.spring(pillAnim, {
-      toValue: state.index,
+      toValue: activeVisibleIndex >= 0 ? activeVisibleIndex : -1,
       useNativeDriver: true,
       tension: 30,  // snappy but not jarring
       friction: 6,  // smooth settling, minimal overshoot
     }).start();
-  }, [state.index]);
+  }, [activeVisibleIndex]);
 
-  const tabCount  = state.routes.length;
+  const tabCount  = visibleRoutes.length;
   // Subtract capsule horizontal padding (8 each side = 16) for the usable inner width
   const pillWidth = capsuleWidth > 0 ? (capsuleWidth - 16) / tabCount : 0;
 
@@ -256,7 +266,7 @@ export default function CustomTabBar({ state, navigation }: BottomTabBarProps) {
         onLayout={(e) => setCapsuleWidth(e.nativeEvent.layout.width)}
       >
         {/* Animated sliding pill — sits behind the tab icons */}
-        {pillWidth > 0 && (
+        {pillWidth > 0 && activeVisibleIndex >= 0 && (
           <Animated.View
             pointerEvents="none"
             style={[
@@ -266,20 +276,24 @@ export default function CustomTabBar({ state, navigation }: BottomTabBarProps) {
           />
         )}
 
-        {state.routes.map((route, index) => {
-          const isFocused = state.index === index;
+        {visibleRoutes.map((route) => {
+          const isFocused = currentRouteName === route.name;
           const isProfile = route.name === 'Profile';
 
           // Icons change colour when active; profile pic stays as-is
           const iconColor = isFocused && !isProfile ? ACTIVE : INACTIVE;
 
           const onPress = () => {
-            const event = navigation.emit({
-              type: 'tabPress',
-              target: route.key,
-              canPreventDefault: true,
-            });
-            if (!isFocused && !event.defaultPrevented) {
+            let defaultPrevented = false;
+            if (typeof navigation.emit === 'function') {
+              const event = navigation.emit({
+                type: 'tabPress',
+                target: route.key,
+                canPreventDefault: true,
+              });
+              defaultPrevented = event.defaultPrevented;
+            }
+            if (!isFocused && !defaultPrevented) {
               navigation.navigate(route.name as never);
             }
           };
@@ -316,7 +330,9 @@ const styles = StyleSheet.create({
     left: 26,
     right: 26,
     alignItems: 'center',
+    zIndex: 99,
   },
+
   capsule: {
     width: '100%',
     height: 72,
@@ -326,7 +342,7 @@ const styles = StyleSheet.create({
     borderRadius: 100,
     borderWidth: 1,
     borderColor: '#0D242E',
-    backgroundColor: 'rgba(6, 13, 16, 0.90)',
+    backgroundColor: '#060D10',
     // Box shadow (iOS)
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -334,7 +350,6 @@ const styles = StyleSheet.create({
     shadowRadius: 9.5,
     // Elevation (Android)
     elevation: 12,
-    overflow: 'hidden', // clip pill to rounded capsule
   },
   // The sliding pill — absolutely pinned top/bottom with same 8px inset as sides
   pill: {

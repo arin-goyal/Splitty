@@ -24,6 +24,7 @@ interface FriendState {
   fetchFriendRequests: () => Promise<void>;
   sendFriendRequest: (email: string) => Promise<{ success: boolean; message: string }>;
   respondToFriendRequest: (requestId: string, status: 'accepted' | 'denied') => Promise<boolean>;
+  removeFriend: (friendId: string) => Promise<boolean>;
   clearError: () => void;
   setAddFriendVisible: (visible: boolean) => void;
   setRequestsVisible: (visible: boolean) => void;
@@ -105,6 +106,22 @@ export const useFriendStore = create<FriendState>((set, get) => ({
       return true;
     } catch (err: any) {
       const message = err.response?.data?.error || 'Failed to respond to friend request';
+      set({ error: message, isLoading: false });
+      return false;
+    }
+  },
+
+  removeFriend: async (friendId) => {
+    set({ isLoading: true, error: null });
+    try {
+      await api.delete(`/friends/${friendId}`);
+      set((state) => ({
+        friends: state.friends.filter((f) => f.id !== friendId),
+        isLoading: false,
+      }));
+      return true;
+    } catch (err: any) {
+      const message = err.response?.data?.error || 'Failed to remove friend';
       set({ error: message, isLoading: false });
       return false;
     }

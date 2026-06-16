@@ -1,14 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  ActivityIndicator,
   ScrollView,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  Animated
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../../navigation/AppNavigator';
@@ -19,10 +19,18 @@ import AppIcon from '../../components/AppIcon';
 import FloatingLabelInput from '../../components/FloatingLabelInput';
 import BackgroundVector from '../../components/BackgroundVector';
 import ScreenEdgeGradients from '../../components/ScreenEdgeGradients';
+import Button from '../../components/Button';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Signup'>;
 
 export default function SignupScreen({ navigation }: Props) {
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const handleScroll = useRef(
+    Animated.event(
+      [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+      { useNativeDriver: true }
+    )
+  ).current;
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -75,9 +83,14 @@ export default function SignupScreen({ navigation }: Props) {
       style={styles.keyboardContainer}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <BackgroundVector />
+      <BackgroundVector scrollY={scrollY} />
       <ScreenEdgeGradients />
-      <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
+      <Animated.ScrollView
+        contentContainerStyle={styles.scrollContainer}
+        keyboardShouldPersistTaps="handled"
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+      >
         {/* Signup Card Box */}
         <View style={styles.card}>
           <AppIcon />
@@ -120,17 +133,16 @@ export default function SignupScreen({ navigation }: Props) {
               autoCapitalize="none"
             />
 
-            <TouchableOpacity
+            <Button
+              variant="filled"
+              color="#B1CDC1"
+              textColor="#060D10"
+              title="Sign Up"
               style={styles.button}
+              textStyle={styles.buttonText}
               onPress={handleSignup}
-              disabled={localLoading}
-            >
-              {localLoading ? (
-                <ActivityIndicator color="#060D10" />
-              ) : (
-                <Text style={styles.buttonText}>Sign Up</Text>
-              )}
-            </TouchableOpacity>
+              loading={localLoading}
+            />
           </View>
 
           <View style={styles.footer}>
@@ -140,7 +152,7 @@ export default function SignupScreen({ navigation }: Props) {
             </TouchableOpacity>
           </View>
         </View>
-      </ScrollView>
+      </Animated.ScrollView>
     </KeyboardAvoidingView>
   );
 }

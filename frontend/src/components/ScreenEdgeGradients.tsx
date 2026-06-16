@@ -12,15 +12,17 @@ export default function ScreenEdgeGradients() {
     <>
       {/* Top edge: transparent at top → dark at bottom */}
       <LinearGradient
-        colors={['rgba(0,0,0,0.6)', 'rgba(0,0,0,0)']}
+        colors={['rgba(3, 6, 7, 1)', 'rgba(6, 13, 16, 1)', 'rgba(6, 13, 16, 0)']}
         style={styles.top}
         pointerEvents="none"
+        locations={[0.1,0.8, 1]}
       />
       {/* Bottom edge: dark at top → transparent at bottom (flipped) */}
       <LinearGradient
-        colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.6)']}
+        colors={['rgba(6, 13, 16, 0)', 'rgba(0, 4, 6, 1)']}
         style={styles.bottom}
         pointerEvents="none"
+        locations={[0, 0.7]}
       />
     </>
   );

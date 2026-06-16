@@ -394,4 +394,58 @@ router.post('/:id/demote-admin', async (req: AuthRequest, res: Response) => {
   }
 });
 
+// DELETE GROUP (Admins only)
+router.delete('/:id', async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = req.userId!;
+
+    if (typeof id !== 'string') {
+      return res.status(400).json({ error: 'Invalid group ID' });
+    }
+
+    const group = await prisma.group.findUnique({
+      where: { id },
+      include: { members: true },
+    });
+
+    if (!group) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+
+    const isAdmin = group.members.some(
+      (m) => m.userId === userId && m.role === 'admin'
+    );
+    if (!isAdmin) {
+      return res.status(403).json({ error: 'Only admins can delete this group' });
+    }
+
+    // Delete splits first since they cascade on group expense, but let's make sure
+    const groupExpenses = await prisma.groupExpense.findMany({
+      where: { groupId: id }
+    });
+
+    for (const ge of groupExpenses) {
+      await prisma.split.deleteMany({
+        where: { groupExpenseId: ge.id }
+      });
+      await prisma.groupExpense.delete({
+        where: { id: ge.id }
+      });
+      await prisma.expense.delete({
+        where: { id: ge.expenseId }
+      });
+    }
+
+    await prisma.group.delete({
+      where: { id },
+    });
+
+    res.json({ message: 'Group deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting group:', error);
+    res.status(500).json({ error: 'Failed to delete group' });
+  }
+});
+
 export default router;

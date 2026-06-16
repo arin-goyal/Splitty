@@ -2,22 +2,49 @@ import { create } from 'zustand';
 import api from '../services/api';
 import { Expense, Group, Category, Balance, GroupExpense } from '../types';
 
+export interface BudgetOverview {
+  id: string;
+  category: string;
+  icon: string;
+  spent: number;
+  limit: number;
+}
+
 interface AppState {
   expenses: Expense[];
   expensesTotal: number;
+  dashboardExpenses: Expense[];
+  dashboardExpensesTotal: number;
   groups: Group[];
   activeGroup: Group | null;
   activeGroupBalances: Balance[];
   activeGroupExpenses: GroupExpense[];
   categories: Category[];
+  budgets: BudgetOverview[];
   isLoading: boolean;
   error: string | null;
 
   setError: (error: string | null) => void;
   fetchCategories: () => Promise<void>;
-  
+  createCategory: (name: string, icon?: string) => Promise<Category | null>;
+  fetchBudgets: () => Promise<void>;
+  createBudget: (data: { category: string; monthlyLimit: number; icon?: string }) => Promise<boolean>;
+  deleteBudget: (id: string) => Promise<boolean>;
+
+  // Budget Modal State
+  isManageBudgetVisible: boolean;
+  budgetModalMode: 'list' | 'add' | 'edit';
+  setIsManageBudgetVisible: (visible: boolean) => void;
+  setBudgetModalMode: (mode: 'list' | 'add' | 'edit') => void;
+
   // Personal Expenses
   fetchExpenses: (filters?: {
+    startDate?: string;
+    endDate?: string;
+    categoryId?: string;
+    merchant?: string;
+  }) => Promise<void>;
+  fetchDashboardExpenses: (filters?: {
     startDate?: string;
     endDate?: string;
     categoryId?: string;
@@ -45,6 +72,8 @@ interface AppState {
   fetchGroups: () => Promise<void>;
   fetchGroupDetails: (groupId: string) => Promise<Group | null>;
   createGroup: (name: string, icon?: string) => Promise<Group | null>;
+  updateGroup: (groupId: string, name: string, icon?: string) => Promise<boolean>;
+  deleteGroup: (groupId: string) => Promise<boolean>;
   addMemberToGroup: (groupId: string, userId: string) => Promise<boolean>;
   removeMemberFromGroup: (groupId: string, memberId: string) => Promise<boolean>;
   promoteMemberToAdmin: (groupId: string, memberId: string) => Promise<boolean>;
@@ -61,6 +90,8 @@ interface AppState {
     merchant?: string;
     splitType: 'equal' | 'custom';
     customSplits?: { personId: string; amount: number }[];
+    paidByUserId?: string;
+    date?: string;
   }) => Promise<GroupExpense | null>;
   deleteGroupExpense: (groupId: string, expenseId: string) => Promise<boolean>;
   settleSplit: (groupId: string, splitId: string) => Promise<boolean>;
@@ -69,15 +100,63 @@ interface AppState {
 export const useAppStore = create<AppState>((set, get) => ({
   expenses: [],
   expensesTotal: 0,
+  dashboardExpenses: [],
+  dashboardExpensesTotal: 0,
   groups: [],
   activeGroup: null,
   activeGroupBalances: [],
   activeGroupExpenses: [],
   categories: [],
+  budgets: [],
   isLoading: false,
   error: null,
 
   setError: (error) => set({ error }),
+
+  // Budget Modal State Implementation
+  isManageBudgetVisible: false,
+  budgetModalMode: 'list',
+  setIsManageBudgetVisible: (visible) => set({ isManageBudgetVisible: visible }),
+  setBudgetModalMode: (mode) => set({ budgetModalMode: mode }),
+
+  fetchBudgets: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await api.get('/budgets');
+      set({ budgets: response.data.budgets, isLoading: false });
+    } catch (err: any) {
+      const message = err.response?.data?.error || 'Failed to fetch budgets';
+      set({ error: message, isLoading: false });
+    }
+  },
+
+  createBudget: async (data) => {
+    set({ isLoading: true, error: null });
+    try {
+      await api.post('/budgets', data);
+      await get().fetchBudgets();
+      set({ isLoading: false });
+      return true;
+    } catch (err: any) {
+      const message = err.response?.data?.error || 'Failed to create budget';
+      set({ error: message, isLoading: false });
+      return false;
+    }
+  },
+
+  deleteBudget: async (id) => {
+    set({ isLoading: true, error: null });
+    try {
+      await api.delete(`/budgets/${id}`);
+      await get().fetchBudgets();
+      set({ isLoading: false });
+      return true;
+    } catch (err: any) {
+      const message = err.response?.data?.error || 'Failed to delete budget';
+      set({ error: message, isLoading: false });
+      return false;
+    }
+  },
 
   fetchCategories: async () => {
     set({ isLoading: true, error: null });
@@ -90,17 +169,49 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
+  createCategory: async (name, icon) => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await api.post('/expenses/categories', { name, icon });
+      const newCategory = response.data;
+      set((state) => ({
+        categories: [...state.categories, newCategory],
+        isLoading: false
+      }));
+      return newCategory;
+    } catch (err: any) {
+      const message = err.response?.data?.error || 'Failed to create category';
+      set({ error: message, isLoading: false });
+      return null;
+    }
+  },
+
   fetchExpenses: async (filters) => {
     set({ isLoading: true, error: null });
     try {
       const response = await api.get('/expenses', { params: filters });
-      set({ 
-        expenses: response.data.expenses, 
-        expensesTotal: response.data.total, 
-        isLoading: false 
+      set({
+        expenses: response.data.expenses,
+        expensesTotal: response.data.total,
+        isLoading: false
       });
     } catch (err: any) {
       const message = err.response?.data?.error || 'Failed to fetch expenses';
+      set({ error: message, isLoading: false });
+    }
+  },
+
+  fetchDashboardExpenses: async (filters) => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await api.get('/expenses', { params: filters });
+      set({
+        dashboardExpenses: response.data.expenses,
+        dashboardExpensesTotal: response.data.total,
+        isLoading: false
+      });
+    } catch (err: any) {
+      const message = err.response?.data?.error || 'Failed to fetch dashboard expenses';
       set({ error: message, isLoading: false });
     }
   },
@@ -109,10 +220,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const response = await api.post('/expenses', data);
-      set((state) => ({ 
+      set((state) => ({
         expenses: [response.data, ...state.expenses],
         expensesTotal: state.expensesTotal + 1,
-        isLoading: false 
+        isLoading: false
       }));
       return response.data;
     } catch (err: any) {
@@ -128,6 +239,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const response = await api.put(`/expenses/${id}`, data);
       set((state) => ({
         expenses: state.expenses.map((e) => (e.id === id ? response.data : e)),
+        dashboardExpenses: state.dashboardExpenses.map((e) => (e.id === id ? response.data : e)),
         isLoading: false,
       }));
       return response.data;
@@ -145,6 +257,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       set((state) => ({
         expenses: state.expenses.filter((e) => e.id !== id),
         expensesTotal: Math.max(0, state.expensesTotal - 1),
+        dashboardExpenses: state.dashboardExpenses.filter((e) => e.id !== id),
+        dashboardExpensesTotal: Math.max(0, state.dashboardExpensesTotal - 1),
         isLoading: false,
       }));
       return true;
@@ -192,6 +306,40 @@ export const useAppStore = create<AppState>((set, get) => ({
       const message = err.response?.data?.error || 'Failed to create group';
       set({ error: message, isLoading: false });
       return null;
+    }
+  },
+
+  updateGroup: async (groupId, name, icon) => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await api.put(`/groups/${groupId}`, { name, icon });
+      set((state) => ({
+        groups: state.groups.map(g => g.id === groupId ? { ...g, ...response.data } : g),
+        activeGroup: state.activeGroup?.id === groupId ? { ...state.activeGroup, ...response.data } : state.activeGroup,
+        isLoading: false,
+      }));
+      return true;
+    } catch (err: any) {
+      const message = err.response?.data?.error || 'Failed to update group';
+      set({ error: message, isLoading: false });
+      return false;
+    }
+  },
+
+  deleteGroup: async (groupId) => {
+    set({ isLoading: true, error: null });
+    try {
+      await api.delete(`/groups/${groupId}`);
+      set((state) => ({
+        groups: state.groups.filter(g => g.id !== groupId),
+        activeGroup: state.activeGroup?.id === groupId ? null : state.activeGroup,
+        isLoading: false,
+      }));
+      return true;
+    } catch (err: any) {
+      const message = err.response?.data?.error || 'Failed to delete group';
+      set({ error: message, isLoading: false });
+      return false;
     }
   },
 
@@ -280,16 +428,16 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const response = await api.post('/group-expenses', data);
-      
+
       // Update local states
       set((state) => ({
         activeGroupExpenses: [response.data, ...state.activeGroupExpenses],
         isLoading: false,
       }));
-      
+
       // Refresh balances
       await get().fetchGroupBalances(data.groupId);
-      
+
       return response.data;
     } catch (err: any) {
       const message = err.response?.data?.error || 'Failed to create group expense';
@@ -302,15 +450,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       await api.delete(`/group-expenses/${groupId}/expenses/${expenseId}`);
-      
+
       set((state) => ({
         activeGroupExpenses: state.activeGroupExpenses.filter((e) => e.expenseId !== expenseId),
         isLoading: false,
       }));
-      
+
       // Refresh balances
       await get().fetchGroupBalances(groupId);
-      
+
       return true;
     } catch (err: any) {
       const message = err.response?.data?.error || 'Failed to delete group expense';
@@ -323,11 +471,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       await api.put(`/group-expenses/${groupId}/splits/${splitId}/settle`);
-      
+
       // Refresh balances and expenses
       await get().fetchGroupExpenses(groupId);
       await get().fetchGroupBalances(groupId);
-      
+
       set({ isLoading: false });
       return true;
     } catch (err: any) {

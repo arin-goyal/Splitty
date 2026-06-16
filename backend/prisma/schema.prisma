@@ -24,17 +24,22 @@ model User {
   chats     ChatMessage[]
   sentRequests     FriendRequest[] @relation("SentRequests")
   receivedRequests FriendRequest[] @relation("ReceivedRequests")
+  categories       Category[]
 
   @@index([email])
 }
 
 model Category {
   id        String     @id @default(cuid())
-  name      String     @unique
+  name      String
   icon      String?
   color     String?
+  userId    String?
+  user      User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   expenses  Expense[]
+
+  @@unique([name, userId])
 }
 
 model Expense {

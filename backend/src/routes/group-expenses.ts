@@ -11,7 +11,7 @@ router.use(authMiddleware);
 router.post('/', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId!;
-    const { groupId, amount, currency, categoryId, description, merchant, splitType, customSplits } = req.body;
+    const { groupId, amount, currency, categoryId, description, merchant, splitType, customSplits, paidByUserId, date } = req.body;
 
     // Validate input
     if (!groupId || !amount || !categoryId) {
@@ -36,22 +36,30 @@ router.post('/', async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'Group not found' });
     }
 
-    // Check if user is a member
+    // Check if logged in user is a member
     const isMember = group.members.some((m) => m.userId === userId);
     if (!isMember) {
       return res.status(403).json({ error: 'You are not a member of this group' });
     }
 
+    const payerId = paidByUserId || userId;
+
+    // Check if payer is a member of the group
+    const isPayerMember = group.members.some((m) => m.userId === payerId);
+    if (!isPayerMember) {
+      return res.status(400).json({ error: 'Payer must be a member of this group' });
+    }
+
     // Create the expense
     const expense = await prisma.expense.create({
       data: {
-        userId,
+        userId: payerId,
         amount,
         currency: currency || 'INR',
         categoryId,
         description: description || 'Group expense',
         merchant: merchant || '',
-        date: new Date(),
+        date: date ? new Date(date) : new Date(),
       },
     });
 
@@ -64,7 +72,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
 
       splits = group.members.map((member) => ({
         personId: member.userId,
-        amount: member.userId === userId ? 0 : amountPerPerson,
+        amount: member.userId === payerId ? 0 : amountPerPerson,
       }));
     } else if (splitType === 'custom') {
       // Validate custom splits sum to total
@@ -78,7 +86,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
 
       splits = customSplits.map((split: any) => ({
         personId: split.personId,
-        amount: split.personId === userId ? 0 : split.amount,
+        amount: split.personId === payerId ? 0 : split.amount,
       }));
     }
 
@@ -87,7 +95,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
       data: {
         groupId,
         expenseId: expense.id,
-        paidByUserId: userId,
+        paidByUserId: payerId,
         splits: {
           create: splits,
         },

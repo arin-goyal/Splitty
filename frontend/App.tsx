@@ -2,6 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import {
+  useFonts,
+  PlayfairDisplay_400Regular,
+  PlayfairDisplay_400Regular_Italic,
+  PlayfairDisplay_700Bold,
+  PlayfairDisplay_700Bold_Italic,
+} from '@expo-google-fonts/playfair-display';
+import { BebasNeue_400Regular } from '@expo-google-fonts/bebas-neue';
 
 import AppNavigator from './src/navigation/AppNavigator';
 import GlobalModals from './src/components/GlobalModals';
@@ -12,6 +20,14 @@ import { COLORS } from './src/theme/colors';
 export default function App() {
   const { token, setUser, logout } = useAuthStore();
   const [appReady, setAppReady] = useState(false);
+
+  const [fontsLoaded] = useFonts({
+    'PlayfairDisplay-Regular': PlayfairDisplay_400Regular,
+    'PlayfairDisplay-Italic': PlayfairDisplay_400Regular_Italic,
+    'PlayfairDisplay-Bold': PlayfairDisplay_700Bold,
+    'PlayfairDisplay-BoldItalic': PlayfairDisplay_700Bold_Italic,
+    'BebasNeue-Regular': BebasNeue_400Regular,
+  });
 
   useEffect(() => {
     async function initializeApp() {
@@ -34,7 +50,7 @@ export default function App() {
     initializeApp();
   }, []);
 
-  if (!appReady) {
+  if (!appReady || !fontsLoaded) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={COLORS.primary} />

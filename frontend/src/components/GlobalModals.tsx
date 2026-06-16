@@ -9,9 +9,13 @@ import {
   ActivityIndicator,
   Alert,
   BackHandler,
+  Modal,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { useFriendStore } from '../store/friendStore';
+import { useAppStore } from '../store/appStore';
+import ManageBudgetsModal from './dashboard/ManageBudgetsModal';
+import Button from './Button';
 
 export default function GlobalModals() {
   const {
@@ -25,15 +29,21 @@ export default function GlobalModals() {
     setRequestsVisible,
   } = useFriendStore();
 
+  const {
+    isManageBudgetVisible,
+    setIsManageBudgetVisible,
+  } = useAppStore();
+
   const [emailInput, setEmailInput] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   // Dismiss overlays on Android back button press
   useEffect(() => {
-    if (addFriendVisible || requestsVisible) {
+    if (addFriendVisible || requestsVisible || isManageBudgetVisible) {
       const backAction = () => {
         setAddFriendVisible(false);
         setRequestsVisible(false);
+        setIsManageBudgetVisible(false);
         setEmailInput('');
         return true;
       };
@@ -43,7 +53,7 @@ export default function GlobalModals() {
       );
       return () => backHandler.remove();
     }
-  }, [addFriendVisible, requestsVisible]);
+  }, [addFriendVisible, requestsVisible, isManageBudgetVisible]);
 
   const handleSendRequest = async () => {
     if (!emailInput.trim()) {
@@ -69,14 +79,23 @@ export default function GlobalModals() {
     }
   };
 
-  if (!addFriendVisible && !requestsVisible) {
+  if (!addFriendVisible && !requestsVisible && !isManageBudgetVisible) {
     return null;
   }
 
   return (
     <>
       {/* ─── Add Friend Overlay ────────────────────────────────────────────────── */}
-      {addFriendVisible && (
+      <Modal
+        visible={addFriendVisible}
+        transparent={true}
+        animationType="fade"
+        statusBarTranslucent={true}
+        onRequestClose={() => {
+          setAddFriendVisible(false);
+          setEmailInput('');
+        }}
+      >
         <TouchableOpacity
           style={styles.modalOverlay}
           activeOpacity={1}
@@ -110,34 +129,37 @@ export default function GlobalModals() {
             />
 
             <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={[styles.modalBtn, styles.modalBtnCancel]}
+              <Button
+                variant="outline"
+                title="Cancel"
+                style={styles.modalBtn}
                 onPress={() => {
                   setAddFriendVisible(false);
                   setEmailInput('');
                 }}
-              >
-                <Text style={styles.modalBtnCancelText}>Cancel</Text>
-              </TouchableOpacity>
+              />
 
-              <TouchableOpacity
-                style={[styles.modalBtn, styles.modalBtnConfirm]}
+              <Button
+                variant="filled"
+                color="#B1CDC1"
+                title="Send Request"
+                style={styles.modalBtn}
                 onPress={handleSendRequest}
-                disabled={submitting}
-              >
-                {submitting ? (
-                  <ActivityIndicator size="small" color="#060D10" />
-                ) : (
-                  <Text style={styles.modalBtnConfirmText}>Send Request</Text>
-                )}
-              </TouchableOpacity>
+                loading={submitting}
+              />
             </View>
           </TouchableOpacity>
         </TouchableOpacity>
-      )}
+      </Modal>
 
       {/* ─── Friend Requests Overlay ────────────────────────────────────────────── */}
-      {requestsVisible && (
+      <Modal
+        visible={requestsVisible}
+        transparent={true}
+        animationType="fade"
+        statusBarTranslucent={true}
+        onRequestClose={() => setRequestsVisible(false)}
+      >
         <TouchableOpacity
           style={styles.modalOverlay}
           activeOpacity={1}
@@ -195,15 +217,18 @@ export default function GlobalModals() {
               </ScrollView>
             )}
 
-            <TouchableOpacity
-              style={styles.closeModalBtn}
+            <Button
+              variant="outline"
+              title="Close"
+              style={{ width: '100%', marginTop: 8 }}
               onPress={() => setRequestsVisible(false)}
-            >
-              <Text style={styles.closeModalBtnText}>Close</Text>
-            </TouchableOpacity>
+            />
           </TouchableOpacity>
         </TouchableOpacity>
-      )}
+      </Modal>
+
+      {/* ─── Manage Budgets Global Overlay ────────────────────────────────────── */}
+      <ManageBudgetsModal />
     </>
   );
 }
@@ -261,28 +286,6 @@ const styles = StyleSheet.create({
   },
   modalBtn: {
     flex: 1,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalBtnCancel: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: '#1A3040',
-  },
-  modalBtnCancelText: {
-    color: '#7E9A8E',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  modalBtnConfirm: {
-    backgroundColor: '#00EE87',
-  },
-  modalBtnConfirmText: {
-    color: '#060D10',
-    fontSize: 15,
-    fontWeight: '600',
   },
   requestsList: {
     maxHeight: 250,
@@ -340,22 +343,6 @@ const styles = StyleSheet.create({
     color: '#FF4C4C',
     fontSize: 16,
     fontWeight: 'bold',
-  },
-  closeModalBtn: {
-    width: '100%',
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: '#1A3040',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-  },
-  closeModalBtnText: {
-    color: '#7E9A8E',
-    fontSize: 15,
-    fontWeight: '600',
   },
   emptyContainer: {
     alignItems: 'center',

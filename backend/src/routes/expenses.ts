@@ -73,11 +73,58 @@ router.get('/', async (req: AuthRequest, res: Response) => {
 
 router.get('/categories', async (req: AuthRequest, res: Response) => {
   try {
-    const categories = await prisma.category.findMany();
+    const userId = req.userId!;
+    const categories = await prisma.category.findMany({
+      where: {
+        OR: [
+          { userId: null },
+          { userId },
+        ],
+      },
+    });
     res.json(categories);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to fetch categories' });
+  }
+});
+
+router.post('/categories', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId!;
+    const { name, icon } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ error: 'Category name is required' });
+    }
+
+    // Check if category already exists for this user (either global or custom)
+    const existing = await prisma.category.findFirst({
+      where: {
+        name: { equals: name, mode: 'insensitive' },
+        OR: [
+          { userId: null },
+          { userId },
+        ],
+      },
+    });
+
+    if (existing) {
+      return res.status(400).json({ error: 'Category already exists' });
+    }
+
+    const category = await prisma.category.create({
+      data: {
+        name,
+        icon: icon || '💰',
+        userId,
+      },
+    });
+
+    res.status(201).json(category);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to create category' });
   }
 });
 
