@@ -3,7 +3,11 @@ import { StyleSheet, Text, TouchableOpacity, Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-export default function AddExpenseFloatingButton() {
+interface AddExpenseFloatingButtonProps {
+  groupId?: string;
+}
+
+export default function AddExpenseFloatingButton({ groupId }: AddExpenseFloatingButtonProps) {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
 
@@ -13,7 +17,13 @@ export default function AddExpenseFloatingButton() {
   return (
     <TouchableOpacity
       style={[styles.floatingButton, { bottom: bottomPosition }]}
-      onPress={() => navigation.navigate('AddExpense' as never)}
+      onPress={() => {
+        if (groupId) {
+          (navigation as any).navigate('AddExpense', { groupId });
+        } else {
+          navigation.navigate('AddExpense' as never);
+        }
+      }}
       activeOpacity={0.8}
     >
       <Text style={styles.floatingButtonPlusText}>+</Text>

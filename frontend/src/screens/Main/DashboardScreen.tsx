@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { StyleSheet, View, Animated, Text, TouchableOpacity } from 'react-native';
+import { StyleSheet, View, Animated, Text, TouchableOpacity, RefreshControl } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import ScreenWrapper from '../../components/ScreenWrapper';
 import { useAppStore } from '../../store/appStore';
@@ -10,6 +10,7 @@ import SpentWidget from '../../components/dashboard/SpentWidget';
 import BudgetOverview from '../../components/dashboard/BudgetOverview';
 import RecentActivity from '../../components/dashboard/RecentActivity';
 import AddExpenseFloatingButton from '../../components/AddExpenseFloatingButton';
+import ExpenseDetailModal from '../../components/ExpenseDetailModal';
 
 // Helper to compute date ranges for backend query filters
 const getDateRangeForTimeframe = (timeframe: 'daily' | 'weekly' | 'monthly') => {
@@ -107,6 +108,7 @@ export default function DashboardScreen() {
   const [prevTotal, setPrevTotal] = useState<number | null>(null);
   const [timeLeftStr, setTimeLeftStr] = useState('');
   const [recentExpenses, setRecentExpenses] = useState<Expense[]>([]);
+  const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
 
   // Function to calculate time left until midnight tonight
   const updateTimeLeft = useCallback(() => {
@@ -132,38 +134,51 @@ export default function DashboardScreen() {
     return () => clearInterval(timer);
   }, [updateTimeLeft]);
 
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchDashboardData = useCallback(async () => {
+    const filters = getDateRangeForTimeframe(timeframe);
+    const fetchPreviousTotal = async () => {
+      try {
+        const prevRange = getPreviousDateRangeForTimeframe(timeframe);
+        const response = await api.get('/expenses', { params: prevRange });
+        const total = response.data.expenses.reduce((sum: number, item: any) => sum + item.amount, 0);
+        setPrevTotal(total);
+      } catch (error) {
+        console.log('Failed to fetch previous period totals:', error);
+        setPrevTotal(0);
+      }
+    };
+
+    const fetchRecentExpenses = async () => {
+      try {
+        const response = await api.get('/expenses', { params: { limit: '3' } });
+        setRecentExpenses(response.data.expenses);
+      } catch (error) {
+        console.log('Failed to fetch recent expenses:', error);
+      }
+    };
+
+    await Promise.all([
+      fetchDashboardExpenses(filters),
+      fetchBudgets(),
+      fetchCategories(),
+      fetchPreviousTotal(),
+      fetchRecentExpenses(),
+    ]);
+  }, [timeframe, fetchDashboardExpenses, fetchBudgets, fetchCategories]);
+
   useFocusEffect(
     useCallback(() => {
-      const filters = getDateRangeForTimeframe(timeframe);
-      fetchDashboardExpenses(filters);
-      fetchBudgets();
-      fetchCategories();
-
-      const fetchPreviousTotal = async () => {
-        try {
-          const prevRange = getPreviousDateRangeForTimeframe(timeframe);
-          const response = await api.get('/expenses', { params: prevRange });
-          const total = response.data.expenses.reduce((sum: number, item: any) => sum + item.amount, 0);
-          setPrevTotal(total);
-        } catch (error) {
-          console.log('Failed to fetch previous period totals:', error);
-          setPrevTotal(0);
-        }
-      };
-
-      const fetchRecentExpenses = async () => {
-        try {
-          const response = await api.get('/expenses', { params: { limit: '3' } });
-          setRecentExpenses(response.data.expenses);
-        } catch (error) {
-          console.log('Failed to fetch recent expenses:', error);
-        }
-      };
-
-      fetchPreviousTotal();
-      fetchRecentExpenses();
-    }, [timeframe, fetchDashboardExpenses, fetchBudgets, fetchCategories])
+      fetchDashboardData();
+    }, [fetchDashboardData])
   );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchDashboardData();
+    setRefreshing(false);
+  }, [fetchDashboardData]);
 
   const daysLeft = getDaysLeft(timeframe);
   const showTrendRow = daysLeft >= 0 && daysLeft <= 5;
@@ -192,6 +207,14 @@ export default function DashboardScreen() {
           showsVerticalScrollIndicator={false}
           onScroll={handleScroll}
           scrollEventThrottle={16}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#00EE87"
+              colors={["#00EE87"]}
+            />
+          }
         >
           {/* ─── Budget Overview Box ─── */}
           <BudgetOverview
@@ -223,13 +246,34 @@ export default function DashboardScreen() {
               </View>
             ) : (
               recentExpenses.map((expense) => (
-                <RecentActivity key={expense.id} expense={expense} />
+                <RecentActivity
+                  key={expense.id}
+                  expense={expense}
+                  onPress={() => setSelectedExpense(expense)}
+                />
               ))
             )}
           </View>
         </Animated.ScrollView>
       </ScreenWrapper>
       <AddExpenseFloatingButton />
+
+      <ExpenseDetailModal
+        expense={selectedExpense}
+        visible={!!selectedExpense}
+        onClose={() => setSelectedExpense(null)}
+        onDeleted={() => {
+          const filters = getDateRangeForTimeframe(timeframe);
+          fetchDashboardExpenses(filters);
+          const fetchRecentExpenses = async () => {
+            try {
+              const response = await api.get('/expenses', { params: { limit: '3' } });
+              setRecentExpenses(response.data.expenses);
+            } catch {}
+          };
+          fetchRecentExpenses();
+        }}
+      />
     </View>
   );
 }

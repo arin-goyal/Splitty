@@ -56,7 +56,15 @@ router.get('/', async (req: AuthRequest, res: Response) => {
 
     const expenses = await prisma.expense.findMany({
       where,
-      include: { category: true },
+      include: {
+        category: true,
+        groupExpense: {
+          include: {
+            group: true,
+            splits: true,
+          },
+        },
+      },
       orderBy: { date: 'desc' },
       take: parseInt(limit as string),
       skip: parseInt(offset as string),

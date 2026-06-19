@@ -1,14 +1,18 @@
-import React, { useCallback, useRef } from 'react';
-import { StyleSheet, Text, View, Animated, ActivityIndicator } from 'react-native';
+import React, { useCallback, useRef, useState } from 'react';
+import { StyleSheet, Text, View, Animated, ActivityIndicator, RefreshControl } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { COLORS } from '../../theme/colors';
 import ScreenWrapper from '../../components/ScreenWrapper';
 import { useAppStore } from '../../store/appStore';
+import { Expense } from '../../types';
 import RecentActivity from '../../components/dashboard/RecentActivity';
 import AddExpenseFloatingButton from '../../components/AddExpenseFloatingButton';
+import ExpenseDetailModal from '../../components/ExpenseDetailModal';
 
 export default function ExpensesScreen() {
   const { expenses, fetchExpenses, isLoading } = useAppStore();
+
+  const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
 
   const scrollY = useRef(new Animated.Value(0)).current;
   const handleScroll = useRef(
@@ -17,6 +21,19 @@ export default function ExpensesScreen() {
       { useNativeDriver: true }
     )
   ).current;
+
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await fetchExpenses();
+    } catch (err) {
+      console.log('Failed to refresh expenses:', err);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [fetchExpenses]);
 
   useFocusEffect(
     useCallback(() => {
@@ -32,6 +49,14 @@ export default function ExpensesScreen() {
           showsVerticalScrollIndicator={false}
           onScroll={handleScroll}
           scrollEventThrottle={16}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#00EE87"
+              colors={["#00EE87"]}
+            />
+          }
         >
           <View style={styles.header}>
             <Text style={styles.title}>All Expenses</Text>
@@ -47,12 +72,23 @@ export default function ExpensesScreen() {
             </View>
           ) : (
             expenses.map((expense) => (
-              <RecentActivity key={expense.id} expense={expense} />
+              <RecentActivity
+                key={expense.id}
+                expense={expense}
+                onPress={() => setSelectedExpense(expense)}
+              />
             ))
           )}
         </Animated.ScrollView>
       </ScreenWrapper>
       <AddExpenseFloatingButton />
+
+      <ExpenseDetailModal
+        expense={selectedExpense}
+        visible={!!selectedExpense}
+        onClose={() => setSelectedExpense(null)}
+        onDeleted={() => fetchExpenses()}
+      />
     </View>
   );
 }

@@ -150,13 +150,32 @@ function GroupsIcon({ color, active }: { color: string; active: boolean }) {
   );
 }
 
-// ─── Profile Avatar ───────────────────────────────────────────────────────────
-
 function ProfileAvatar({ uri, name }: { uri?: string | null; name?: string }) {
   const AVATAR_SIZE = 38;
   const initials = name ? name.trim().charAt(0).toUpperCase() : '?';
 
   if (uri) {
+    // If it's an emoji (not a web link or base64 data string)
+    const isEmoji = !uri.startsWith('http') && !uri.startsWith('data:') && !uri.startsWith('file:');
+    if (isEmoji) {
+      return (
+        <View
+          style={{
+            width: AVATAR_SIZE,
+            height: AVATAR_SIZE,
+            borderRadius: AVATAR_SIZE / 2,
+            backgroundColor: '#172227',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderWidth: 1.5,
+            borderColor: '#1C292E',
+          }}
+        >
+          <Text style={{ fontSize: 20 }}>{uri}</Text>
+        </View>
+      );
+    }
+
     return (
       <Image
         source={{ uri }}
@@ -225,10 +244,10 @@ export default function CustomTabBar({ state, navigation }: BottomTabBarProps) {
   // Measure the inner capsule width so we can calculate pill width per tab
   const [capsuleWidth, setCapsuleWidth] = useState(0);
 
-  // Filter out AddExpense from the visible tab buttons
-  const visibleRoutes = state.routes.filter((route) => route.name !== 'AddExpense');
+  // Filter out AddExpense and GroupDetail from the visible tab buttons
+  const visibleRoutes = state.routes.filter((route) => route.name !== 'AddExpense' && route.name !== 'GroupDetail');
   const currentRouteName = state.routes[state.index]?.name;
-  const isAddExpenseActive = currentRouteName === 'AddExpense';
+  const isAddExpenseActive = currentRouteName === 'AddExpense' || currentRouteName === 'GroupDetail';
   
   // Calculate activeVisibleIndex among visible tabs
   const activeTabName = isAddExpenseActive ? null : currentRouteName;

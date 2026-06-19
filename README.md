@@ -13,7 +13,8 @@ This project is structured as a monorepo consisting of two primary components:
 * **Database**: PostgreSQL (relational storage for users, groups, expenses, splits)
 * **ORM**: Prisma (type-safe database queries and migrations)
 * **Auth**: JWT (secure tokens stored client-side)
-* **Routes**: Auth, Expenses, Groups, Group Expenses, Friends, Budgets
+* **Routes**: Auth, Expenses, Groups, Group Expenses, Friends, Budgets, Bugs
+* **Integrations**: GitHub API (issues creator), Node DNS resolver
 
 ### 2. Frontend (`/frontend`)
 * **Framework**: React Native + Expo (cross-platform target for Web, iOS, and Android)
@@ -26,54 +27,53 @@ This project is structured as a monorepo consisting of two primary components:
 
 ## 🌟 Key Features
 
-### 👤 Authentication
+### 👤 Authentication & Verification ✉️
 * Secure sign up & login.
+* **Email Verification (OTP)**: Registration is verified via a 6-digit OTP code.
+* **Domain Check (MX Records)**: Performs real-time DNS MX record resolution before sending an OTP to ensure the domain is valid.
+* **Password Complexity Rules**: Enforces strict password criteria (8+ characters, uppercase, lowercase, numbers, and special characters) with real-time strength indicators.
 * JWT auto-login on startup (persisted across sessions).
 * Auto-logout on token expiration (intercepted 401 errors).
+
+### 🎨 Profile Customization
+* Secure "Edit Profile" toggle that locks fields until activated.
+* Choose a cute preset emoji avatar or upload a custom photo from your device's library (using `expo-image-picker` with compression).
+* Custom initials fallback display when no photo is set.
 
 ### 👥 Friend System & Requests ✉️
 * Search and add friends by their email ID.
 * Interactive real-time Heart Badge on the header for pending incoming requests.
 * Actionable Friend Requests panel (Accept / Deny requests).
 * Silent background polling optimization to prevent loading state flickers.
-* High-fidelity glassmorphic background blur overlays for modal cards.
 
-### 🤖 AI Chat Integration 💬
-* Dedicated AI Chat Screen as a platform for future AI expense insights and conversational bill tracking.
-
-### 💳 Personal Expenses
+### 💳 Personal & Group Expenses
 * Create, read, update, and delete personal transactions.
 * Full details display showing category badge, merchant, description, date, and tags.
 * Quick category filter chips and merchant search bar.
 * Filter expenses by date ranges (All time, This Week, This Month).
-* Expenses list scrolls behind the transparent top header for an immersive layered effect.
-
-### 👥 Group Expenses & Split Bills
-* Create groups with custom emoji icons.
-* Invite group members dynamically by searching user email addresses.
-* Promote or demote group admins, and remove members.
-* Split group expenses **equally** among all members.
-* Display real-time aggregated balance sheets (showing who owes whom).
-* Settle individual splits directly with a single click.
+* **Multi-Payer Splits**: Create complex transactions split unequally or equally between group members.
+* **Debt Simplification**: Greedy debt consolidation algorithm that simplifies group balances to minimize transaction overhead (e.g. A owes B, B owes C simplifies directly).
+* Direct settle up option to clear net simplified balances between members.
 
 ### 🎨 UI & Design System
 * **Premium Dark Mode** — custom `#060D10` background with a signature neon-green (`#00EE87`) accent palette.
 * **Parallax Background** — animated `BackgroundVector` shifts subtly as the user scrolls, creating depth.
-* **Screen Edge Gradients** — fixed top and bottom `LinearGradient` overlays that fade content into the background, making scrollable content appear to slide *behind* the header.
+* **Screen Edge Gradients** — fixed top and bottom `LinearGradient` overlays that fade content into the background.
 * **Custom Tab Bar** — fully custom animated bottom navigator with a sliding active indicator and haptic feedback.
-* **Glassmorphic Modals** — `CreateGroupModal`, `AddFriendModal`, and `FriendRequestsModal` use background blur for a frosted-glass feel.
-* **Floating Action Button** — spring-animated `AddExpenseFloatingButton` with a pulsing glow ring.
-* **`TabSlider` Component** — reusable animated pill-tab switcher with configurable pill color, used in the `DateTimePickerModal`.
-* **`WarningBadge` Component** — contextual inline warning badges.
-* **`Button` Component** — reusable styled button with primary/secondary/ghost variants.
+* **Custom Alert Modal** — globally intercepts React Native's native `Alert.alert` calls to display a premium glassmorphic modal mimicking system alerts but with Splitty's custom dark green-accented theme.
+* **Floating Action Buttons** — spring-animated `AddExpenseFloatingButton` and `bugBtnFloating` positioned dynamically above the floating bottom navbar using safe area insets.
 
 ### 📅 Date & Time Picker
 * Custom `DateTimePickerModal` with a full interactive calendar grid.
 * Year navigation arrows to jump between years without scrolling through months.
-* Dynamic calendar grid (5 or 6 rows) based on month layout — no wasted whitespace.
-* **Google Calendar-style time picker** — smooth scroll drum-roll wheels for hours and minutes (snaps to 5-minute intervals).
-* Haptic feedback fires on every hour mark and every 5-minute mark while scrolling the time drum.
-* Defaults to the device's current local time on open.
+* Dynamic calendar grid (5 or 6 rows) based on month layout.
+* **Google Calendar-style Time Picker**: High-fidelity interactive radial clock face dial selector featuring hours/minutes input toggles, concentric 24-hour rings, 5-minute ticks, rotational haptic ticks, and automatic mode switching.
+
+### 🐛 Bug Reporter & GitHub Issues Integration
+* Floating "Report Bug" button on the Profile screen.
+* Opens a modal where users can enter a Title, multiline Description, and rate severity using a custom **5-Exclamation Criticality Bar** (Green -> Yellow -> Orange -> Red color-coded indicators).
+* Automatically posts bug reports as repository issues using the GitHub REST API.
+* Fallback to printing formatted report cards directly to the backend terminal if GitHub environment keys are not configured.
 
 ---
 
@@ -96,11 +96,16 @@ This project is structured as a monorepo consisting of two primary components:
    npm install
    ```
 3. Configure your environment:
-   Create a `.env` file in the `backend` folder and add your database URL and JWT secret:
+   Create a `.env` file in the `backend` folder:
    ```env
    PORT=3000
    DATABASE_URL="postgresql://USERNAME:PASSWORD@localhost:5432/splitty?schema=public"
    JWT_SECRET="your-super-secret-key"
+   
+   # GitHub Integration (Optional - for creating Bug Issues)
+   GITHUB_TOKEN="your_personal_access_token"
+   GITHUB_REPO_OWNER="arin-goyal"
+   GITHUB_REPO_NAME="Splitty"
    ```
 4. Run migrations to create tables:
    ```bash
@@ -148,7 +153,7 @@ Splitty/
 │   ├── prisma/             # Schema definitions and database seeds
 │   └── src/
 │       ├── middleware/     # Auth token verification middlewares
-│       ├── routes/         # Express API routes (auth, expenses, groups, friends, budgets)
+│       ├── routes/         # Express API routes (auth, expenses, groups, friends, budgets, bugs)
 │       └── utils/          # Hashing utilities
 └── frontend/
     ├── App.tsx             # Root component & session initializer
@@ -159,9 +164,11 @@ Splitty/
         │   ├── BackgroundVector.tsx
         │   ├── Button.tsx
         │   ├── CreateGroupModal.tsx
+        │   ├── CustomAlertModal.tsx
         │   ├── CustomTabBar.tsx
         │   ├── DateTimePickerModal.tsx
         │   ├── GlobalModals.tsx
+        │   ├── ReportBugModal.tsx
         │   ├── ScreenEdgeGradients.tsx
         │   ├── ScreenWrapper.tsx
         │   ├── TabSlider.tsx
@@ -170,7 +177,7 @@ Splitty/
         ├── navigation/     # Tab and stack navigators configuration
         ├── screens/        # Auth, Dashboard, Expenses, Groups, Profile, AI Chat, and Detail screens
         ├── services/       # Axios API interceptor configurations
-        ├── store/          # Zustand global stores (authStore, appStore, friendStore)
+        ├── store/          # Zustand global stores (authStore, appStore, alertStore)
         ├── theme/          # Color palette and design tokens
         └── types/          # TypeScript interface contracts for models
 ```

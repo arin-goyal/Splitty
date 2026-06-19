@@ -32,12 +32,12 @@ export type MainTabParamList = {
   AI: undefined;
   Groups: undefined;
   Profile: undefined;
-  AddExpense: { groupId?: string } | undefined;
+  AddExpense: { groupId?: string; editExpense?: import('../types').Expense } | undefined;
+  GroupDetail: { groupId: string };
 };
 
 export type RootStackParamList = {
   MainTabs: undefined;
-  GroupDetail: { groupId: string };
   ExpenseDetail: { expenseId: string };
 };
 
@@ -70,6 +70,7 @@ const MainTabNavigator = () => {
       <MainTab.Screen name="Groups" component={GroupsScreen} options={{ title: 'Groups' }} />
       <MainTab.Screen name="Profile" component={ProfileScreen} options={{ title: 'Profile' }} />
       <MainTab.Screen name="AddExpense" component={AddExpenseScreen} options={{ title: 'Add Expense' }} />
+      <MainTab.Screen name="GroupDetail" component={GroupDetailScreen} options={{ title: 'Group Details' }} />
     </MainTab.Navigator>
   );
 };
@@ -111,11 +112,6 @@ export default function AppNavigator() {
             options={{ headerShown: false }} 
           />
 
-          <RootStack.Screen 
-            name="GroupDetail" 
-            component={GroupDetailScreen} 
-            options={{ title: 'Group Details' }} 
-          />
           <RootStack.Screen 
             name="ExpenseDetail" 
             component={ExpenseDetailScreen} 

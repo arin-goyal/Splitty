@@ -14,7 +14,8 @@ import {
   Pressable,
   Keyboard,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { MainTabParamList } from '../../navigation/AppNavigator';
 import Svg, { Path } from 'react-native-svg';
 import { COLORS } from '../../theme/colors';
 import ScreenWrapper from '../../components/ScreenWrapper';
@@ -64,24 +65,53 @@ const CheckIcon = () => (
   </Svg>
 );
 
+const cleanDescription = (desc: string | null | undefined) => {
+  if (!desc) return '';
+  return desc.replace(/\s*\(Paid by [^)]+\)$/, '').trim();
+};
+
 export default function AddExpenseScreen() {
   const navigation = useNavigation();
+  const route = useRoute<RouteProp<MainTabParamList, 'AddExpense'>>();
+  const editExpense = (route.params as any)?.editExpense as import('../../types').Expense | undefined;
+
   const { 
     categories, 
     fetchCategories, 
-    createExpense, 
+    createExpense,
+    updateExpense,
     createCategory, 
     groups, 
     fetchGroups, 
     createGroup, 
     addMemberToGroup, 
     createGroupExpense,
+    deleteGroupExpense,
     isLoading, 
     error 
   } = useAppStore();
 
   const { friends, fetchFriends, setAddFriendVisible } = useFriendStore();
   const { user } = useAuthStore();
+
+  const [currentEditExpense, setCurrentEditExpense] = useState<import('../../types').Expense | null>(null);
+  const [currentRelatedExpenses, setCurrentRelatedExpenses] = useState<import('../../types').Expense[] | null>(null);
+
+  // Refs to avoid stale closures in the navigation listener
+  const editExpenseRef = useRef(editExpense);
+  editExpenseRef.current = editExpense;
+
+  const categoriesRef = useRef(categories);
+  categoriesRef.current = categories;
+
+  const userRef = useRef(user);
+  userRef.current = user;
+
+  const groupsRef = useRef(groups);
+  groupsRef.current = groups;
+
+  const paramsRef = useRef<any>(null);
+  paramsRef.current = route.params;
 
   const amountInputRef = useRef<TextInput>(null);
 
@@ -101,7 +131,7 @@ export default function AddExpenseScreen() {
                       d.getMonth() === now.getMonth() &&
                       d.getFullYear() === now.getFullYear();
       
-      const datePart = isToday ? 'Today' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const datePart = isToday ? 'Today' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric'});
       const timePart = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
       return `${datePart}, ${timePart}`;
     } catch {
@@ -152,21 +182,138 @@ export default function AddExpenseScreen() {
     fetchFriends();
   }, []);
 
-  // Reset fields on screen focus (since it is a tab screen and doesn't unmount)
+  // Reset fields on screen focus — skip reset if coming in with an editExpense param
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
-      setAmount('');
-      setMerchant('');
-      setDescription('');
-      setDate(new Date().toISOString());
-      if (categories.length > 0) {
-        setSelectedCategoryId(categories[0].id);
+      // If editExpense is in params, pre-fill fields instead of resetting
+      const params = paramsRef.current;
+      const expenseToEdit = params?.editExpense;
+      const relatedExpenses: import('../../types').Expense[] | undefined = params?.relatedExpenses;
+
+      if (expenseToEdit) {
+        setCurrentEditExpense(expenseToEdit);
+        if (relatedExpenses && relatedExpenses.length > 1) {
+          setCurrentRelatedExpenses(relatedExpenses);
+          const totalAmount = relatedExpenses.reduce((sum, e) => sum + e.amount, 0);
+          setAmount(String(totalAmount));
+          
+          const overallDescription = expenseToEdit.description 
+            ? expenseToEdit.description.replace(/\s*\(Paid by [^)]+\)$/, '').trim() 
+            : '';
+          setDescription(overallDescription);
+          setMerchant(expenseToEdit.merchant || '');
+          setDate(expenseToEdit.date || new Date().toISOString());
+          setSelectedCategoryId(expenseToEdit.categoryId || '');
+
+          // Check if it's a group expense
+          const ge = expenseToEdit.groupExpense;
+          if (ge) {
+            setExpenseType('group');
+            const matchedGroup = groupsRef.current.find(g => g.id === ge.groupId) || null;
+            setSelectedGroup(matchedGroup);
+            setSelectedFriends([]);
+
+            // Payer aggregation
+            const payerAmounts: Record<string, number> = {};
+            relatedExpenses.forEach((re) => {
+              const geObj = re.groupExpense;
+              if (geObj) {
+                payerAmounts[geObj.paidByUserId] = (payerAmounts[geObj.paidByUserId] || 0) + re.amount;
+              }
+            });
+
+            const payerIds = Object.keys(payerAmounts);
+            const payerValues = Object.values(payerAmounts);
+            const allPayersEqual = payerValues.every((val) => Math.abs(val - payerValues[0]) < 0.05);
+
+            if (allPayersEqual && payerIds.length > 1) {
+              setPayerMode('multiple-equal');
+              const checked: Record<string, boolean> = {};
+              payerIds.forEach(id => { checked[id] = true; });
+              setPayersEqualChecked(checked);
+              setPayersUnequalData({});
+            } else {
+              setPayerMode('multiple-unequal');
+              const unequalData: Record<string, string> = {};
+              payerIds.forEach(id => { unequalData[id] = String(payerAmounts[id]); });
+              setPayersUnequalData(unequalData);
+              setPayersEqualChecked({});
+            }
+
+            // Split aggregation
+            const splitAmounts: Record<string, number> = {};
+            relatedExpenses.forEach((re) => {
+              const geObj = re.groupExpense;
+              if (geObj) {
+                geObj.splits.forEach((s) => {
+                  splitAmounts[s.personId] = (splitAmounts[s.personId] || 0) + s.amount;
+                });
+              }
+            });
+
+            const splitEntries = Object.entries(splitAmounts).filter(([_, val]) => val > 0);
+            const splitValues = splitEntries.map(([_, val]) => val);
+            const allSplitsEqual = splitValues.every((val) => Math.abs(val - splitValues[0]) < 0.05);
+
+            if (allSplitsEqual) {
+              setSplitMode('equal');
+              const checked: Record<string, boolean> = {};
+              splitEntries.forEach(([id, _]) => { checked[id] = true; });
+              setSplitsEqualChecked(checked);
+              setSplitsUnequalData({});
+            } else {
+              setSplitMode('unequal');
+              const unequalData: Record<string, string> = {};
+              splitEntries.forEach(([id, val]) => { unequalData[id] = String(val); });
+              setSplitsUnequalData(unequalData);
+              setSplitsEqualChecked({});
+            }
+          }
+        } else {
+          setCurrentRelatedExpenses(null);
+          setAmount(String(expenseToEdit.amount));
+          setMerchant(expenseToEdit.merchant || '');
+          setDescription(cleanDescription(expenseToEdit.description));
+          setDate(expenseToEdit.date || new Date().toISOString());
+          setSelectedCategoryId(expenseToEdit.categoryId || '');
+
+          const ge = expenseToEdit.groupExpense;
+          if (ge) {
+            setExpenseType('group');
+            const matchedGroup = groupsRef.current.find(g => g.id === ge.groupId) || null;
+            setSelectedGroup(matchedGroup);
+            setSelectedFriends([]);
+            setPayerMode('single');
+            setSinglePayerId(ge.paidByUserId);
+          } else {
+            setExpenseType('personal');
+            setSelectedGroup(null);
+            setSelectedFriends([]);
+          }
+        }
       } else {
-        setSelectedCategoryId('');
+        setCurrentEditExpense(null);
+        setCurrentRelatedExpenses(null);
+        setAmount('');
+        setMerchant('');
+        setDescription('');
+        setDate(new Date().toISOString());
+        if (categoriesRef.current.length > 0) {
+          setSelectedCategoryId(categoriesRef.current[0].id);
+        } else {
+          setSelectedCategoryId('');
+        }
+        setExpenseType('personal');
+        setSelectedGroup(null);
+        setSelectedFriends([]);
+        setPayerMode('single');
+        if (userRef.current) {
+          setSinglePayerId(userRef.current.id);
+        } else {
+          setSinglePayerId('');
+        }
       }
-      setExpenseType('personal');
-      setSelectedGroup(null);
-      setSelectedFriends([]);
+
       setIsCategoryPickerVisible(false);
       setIsAddCategoryVisible(false);
       setIsGroupFriendsPickerVisible(false);
@@ -174,20 +321,25 @@ export default function AddExpenseScreen() {
       setIsSplitModalVisible(false);
       setIsCreateGroupVisible(false);
       setIsDateTimePickerVisible(false);
-      setPayerMode('single');
-      if (user) {
-        setSinglePayerId(user.id);
-      } else {
-        setSinglePayerId('');
+      if (!expenseToEdit?.groupExpense) {
+        setPayerMode('single');
+        if (userRef.current) {
+          setSinglePayerId(userRef.current.id);
+        } else {
+          setSinglePayerId('');
+        }
       }
       setPayersEqualChecked({});
       setPayersUnequalData({});
       setSplitMode('equal');
       setSplitsEqualChecked({});
       setSplitsUnequalData({});
+
+      // Clear the param so that subsequent focuses (like via the tab bar) start with a blank form
+      navigation.setParams({ editExpense: undefined, relatedExpenses: undefined } as any);
     });
     return unsubscribe;
-  }, [navigation, categories, user]);
+  }, [navigation]);
 
 
 
@@ -354,6 +506,23 @@ export default function AddExpenseScreen() {
     }
 
     if (expenseType === 'personal') {
+      // Edit mode: update existing expense
+      if (currentEditExpense) {
+        const updated = await updateExpense(currentEditExpense.id, {
+          amount: parsedAmount,
+          categoryId: selectedCategoryId,
+          description: description || undefined,
+          merchant: merchant || undefined,
+          date: finalDateStr,
+        });
+        if (updated) {
+          navigation.goBack();
+        } else {
+          Alert.alert('Error', error || 'Failed to update expense. Please try again.');
+        }
+        return;
+      }
+
       const success = await createExpense({
         amount: parsedAmount,
         categoryId: selectedCategoryId,
@@ -370,10 +539,31 @@ export default function AddExpenseScreen() {
       return;
     }
 
-    // Group expense creation
+    // Group expense creation (or edit)
     if (!selectedGroup && selectedFriends.length === 0) {
       Alert.alert('Group or Friends Required', 'Please select a group or friends to split with.');
       return;
+    }
+
+    // If editing a group expense, delete the old one first — we'll re-create below
+    if (currentEditExpense && currentEditExpense.groupExpense) {
+      if (currentRelatedExpenses && currentRelatedExpenses.length > 1) {
+        // Delete all related expenses
+        const groupId = currentEditExpense.groupExpense.groupId;
+        for (const re of currentRelatedExpenses) {
+          const deleted = await deleteGroupExpense(groupId, re.id);
+          if (!deleted) {
+            Alert.alert('Error', 'Failed to update group expense. Could not remove old related expense.');
+            return;
+          }
+        }
+      } else {
+        const deleted = await deleteGroupExpense(currentEditExpense.groupExpense.groupId, currentEditExpense.id);
+        if (!deleted) {
+          Alert.alert('Error', 'Failed to update group expense. Could not remove old expense.');
+          return;
+        }
+      }
     }
 
     let targetGroupId = selectedGroup?.id || '';
@@ -524,7 +714,7 @@ export default function AddExpenseScreen() {
   }, [payersUnequalData, participants]);
 
   return (
-    <ScreenWrapper hideHeader={false}>
+    <ScreenWrapper hideHeader={false} hideBackground>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
@@ -753,7 +943,7 @@ export default function AddExpenseScreen() {
                 <ActivityIndicator size="small" color="#060D10" />
               ) : (
                 <>
-                  <Text style={styles.primaryActionBtnText}>Save Expense</Text>
+                  <Text style={styles.primaryActionBtnText}>{currentEditExpense ? 'Update Expense' : 'Save Expense'}</Text>
                   <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#060D10" strokeWidth={3}>
                     <Path d="M20 6 9 17l-5-5" />
                   </Svg>
@@ -1424,16 +1614,17 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 24,
-    paddingTop: 10,
-    paddingBottom: 160,
+    paddingTop: 0,
+    paddingBottom: 40,
   },
   fieldContainer: {
     marginBottom: 20,
   },
   fieldLabel: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#5A7268',
+    fontFamily: 'System',
+    fontSize: 16,
+    fontWeight: "800",
+    color: '#7E9A8E',
     marginBottom: 8,
   },
   underlineInput: {
@@ -1457,8 +1648,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#071317',
-    borderWidth: 1,
-    borderColor: '#0D242E',
     borderRadius: 16,
     height: 52,
     paddingHorizontal: 16,
@@ -1471,8 +1660,6 @@ const styles = StyleSheet.create({
   },
   noteTextArea: {
     backgroundColor: '#071317',
-    borderWidth: 1,
-    borderColor: '#0D242E',
     borderRadius: 16,
     padding: 16,
     color: '#DBE8E3',

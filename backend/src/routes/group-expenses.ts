@@ -356,9 +356,19 @@ router.delete('/:groupId/expenses/:expenseId', async (req: AuthRequest, res: Res
       return res.status(404).json({ error: 'Expense not found' });
     }
 
-    // Only the person who created it can delete
-    if (groupExpense.paidByUserId !== userId) {
-      return res.status(403).json({ error: 'Only the creator can delete this expense' });
+    // Check if group exists and user is a member
+    const group = await prisma.group.findUnique({
+      where: { id: groupId },
+      include: { members: true },
+    });
+
+    if (!group) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+
+    const isMember = group.members.some((m) => m.userId === userId);
+    if (!isMember) {
+      return res.status(403).json({ error: 'Only group members can delete expenses' });
     }
 
     // Delete splits first

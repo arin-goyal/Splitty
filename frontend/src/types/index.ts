@@ -27,6 +27,18 @@ export interface Expense {
   tags: string[];
   createdAt: string;
   updatedAt: string;
+  /** Present when this expense is part of a group split */
+  groupExpense?: {
+    id: string;
+    groupId: string;
+    paidByUserId: string;
+    group: {
+      id: string;
+      name: string;
+      icon: string | null;
+    };
+    splits: Split[];
+  };
 }
 
 export interface GroupMember {

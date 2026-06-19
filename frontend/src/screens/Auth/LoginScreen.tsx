@@ -8,7 +8,8 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  Animated
+  Animated,
+  Alert
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../../navigation/AppNavigator';
@@ -34,18 +35,16 @@ export default function LoginScreen({ navigation }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [localLoading, setLocalLoading] = useState(false);
-  const [localError, setLocalError] = useState<string | null>(null);
 
   const { setToken, setUser } = useAuthStore();
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
-      setLocalError('Please enter both email and password.');
+      Alert.alert('Error', 'Please enter both email and password.');
       return;
     }
 
     setLocalLoading(true);
-    setLocalError(null);
 
     try {
       const response = await api.post('/auth/login', {
@@ -59,7 +58,7 @@ export default function LoginScreen({ navigation }: Props) {
     } catch (err: any) {
       console.error('Login error:', err);
       const message = err.response?.data?.error || 'Login failed. Check your credentials.';
-      setLocalError(message);
+      Alert.alert('Error', message);
     } finally {
       setLocalLoading(false);
     }
@@ -85,12 +84,6 @@ export default function LoginScreen({ navigation }: Props) {
           <View style={styles.header}>
             <Text style={styles.title}>Sign In to your account</Text>
           </View>
-
-          {localError && (
-            <View style={styles.errorContainer}>
-              <Text style={styles.errorText}>⚠️ {localError}</Text>
-            </View>
-          )}
 
           <View style={styles.form}>
             <FloatingLabelInput
@@ -197,19 +190,6 @@ const styles = StyleSheet.create({
     color: '#060D10', // Dark contrast color for readability
     fontSize: 16,
     fontWeight: '600',
-  },
-  errorContainer: {
-    width: '100%',
-    backgroundColor: 'rgba(255, 59, 48, 0.15)',
-    borderRadius: 10,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: COLORS.error,
-  },
-  errorText: {
-    color: '#FF453A',
-    fontSize: 14,
-    fontWeight: '500',
   },
   footer: {
     flexDirection: 'row',

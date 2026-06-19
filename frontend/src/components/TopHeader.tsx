@@ -3,6 +3,7 @@ import {
   View,
   TouchableOpacity,
   StyleSheet,
+  Text,
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { useNavigation } from '@react-navigation/native';
@@ -30,7 +31,7 @@ function ActiveHeart() {
         fill="#00EE87"
       />
       <Path
-        d="M18.0005 5.69336C18.0239 7.95208 17.1941 10.0376 15.4643 12.0684L15.1265 12.4531C14.2541 13.4136 12.7548 14.8237 9.77977 16.7686C9.55018 16.9193 9.27832 16.9999 9.00048 17L8.79344 16.9844C8.58927 16.9544 8.3932 16.8807 8.22118 16.7676C5.24598 14.8225 3.74679 13.4126 2.8745 12.4521L2.53661 12.0684C0.806063 10.0372 -0.0227836 6.95153 0.000476058 5.69336C0.027721 3.10545 2.18425 1 4.80712 1L5.1577 1.01172C6.87716 1.12851 8.08297 2.08866 8.80419 2.89648C8.8286 2.92353 8.85927 2.94511 8.89305 2.95996C8.91001 2.96735 8.92771 2.97281 8.94579 2.97656L9.00048 2.98242C9.01892 2.98242 9.03723 2.98029 9.05516 2.97656L9.1079 2.95996C9.12475 2.95255 9.14097 2.94324 9.15575 2.93262L9.19676 2.89648C9.78514 2.23684 10.696 1.47685 11.9452 1.15588C11.7872 1.57374 11.7007 2.02676 11.7007 2.5C11.7007 2.53743 11.7012 2.57473 11.7023 2.6119C11.0561 2.89609 10.5469 3.33525 10.1665 3.76172L10.0444 3.88379C9.92034 3.99492 9.78057 4.0848 9.63134 4.15039H9.62938C9.43089 4.23729 9.21676 4.28223 9.00048 4.28223C8.78384 4.28223 8.56959 4.23701 8.37157 4.15039H8.36962C8.16962 3.06249 7.98827 3.93254 7.83934 3.76758L7.83446 3.76172C7.19772 3.04862 6.20138 2.29983 4.80712 2.2998C2.88057 2.2998 1.32083 3.84792 1.30126 5.70703C1.28186 7.59669 1.96049 8.38718 3.52587 11.2246C4.20525 12.0218 5.45767 13.3408 8.33544 15.2832L8.93309 15.6797L8.93602 15.6816C8.95101 15.6915 8.97349 15.6989 9.00048 15.6992C9.0277 15.6991 9.0507 15.6916 9.06591 15.6816L9.06786 15.6807C12.3729 12.5201 13.7493 12.076 14.4741 11.2256L14.7573 10.8809C16.018 9.29352 16.6231 7.73474 16.6932 6.10887C17.1738 5.95012 17.612 5.69805 17.9862 5.37409C17.9946 5.47961 17.9993 5.58607 18.0005 5.69336Z"
+        d="M18.0005 5.69336C18.0239 7.95208 17.1941 10.0376 15.4643 12.0684L15.1265 12.4531C14.2541 13.4136 12.7548 14.8237 9.77977 16.7686C9.55018 16.9193 9.27832 16.9999 9.00048 17L8.79344 16.9844C8.58927 16.9544 8.3932 16.8807 8.22118 16.7676C5.24598 14.8225 3.74679 13.4126 2.8745 12.4521L2.53661 12.0684C0.806063 10.0372 -0.0227836 6.95153 0.000476058 5.69336C0.027721 3.10545 2.18425 1 4.80712 1L5.1577 1.01172C6.87716 1.12851 8.08297 2.08866 8.80419 2.89648C8.8286 2.92353 8.85927 2.94511 8.89305 2.95996C8.91001 2.96735 8.92771 2.97281 8.94579 2.97656L9.00048 2.98242C9.01892 2.98242 9.03723 2.98029 9.05516 2.97656L9.1079 2.95996C9.12475 2.95255 9.14097 2.94324 9.15575 2.93262L9.19676 2.89648C9.78514 2.23684 10.696 1.47685 11.9452 1.15588C11.7872 1.57374 11.7007 2.02676 11.7007 2.5C11.7007 2.53743 11.7012 2.57473 11.7023 2.6119C11.0561 2.89609 10.5469 3.33525 10.1665 3.76172L10.0444 3.88379C9.92034 3.99492 9.78057 4.0848 9.63134 4.15039H9.62938C9.43089 4.23729 9.21676 4.28223 9.00048 4.28223C8.78384 4.28223 8.56959 4.23701 8.37157 4.15039H8.36962C8.16962 3.06249 7.98827 3.93254 7.83934 3.76758L7.83446 3.76172C7.19772 3.04862 6.20138 2.29983 4.80712 2.2998C2.88057 2.2998 1.32083 3.84792 1.30126 5.70703C1.28186 7.59669 1.96049 8.38718 3.52587 11.2246C4.20525 11.0218 5.45767 12.3408 8.33544 14.2832L8.93309 15.6797L8.93602 15.6816C8.95101 14.6915 8.97349 14.6989 9.00048 15.6992C9.0277 15.6991 9.0507 14.6916 9.06591 14.6816L9.06786 14.6807C12.3729 12.5201 13.7493 12.076 14.4741 11.2256L14.7573 10.8809C16.018 9.29352 16.6231 7.73474 16.6932 6.10887C17.1738 5.95012 17.612 5.69805 17.9862 5.37409C17.9946 5.47961 17.9993 5.58607 18.0005 5.69336Z"
         fill="#B1CDC1"
       />
     </Svg>
@@ -58,7 +59,14 @@ function AddFriendIcon() {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function TopHeader() {
+interface TopHeaderProps {
+  title?: string;
+  icon?: string;
+  showBack?: boolean;
+  onBackPress?: () => void;
+}
+
+export default function TopHeader({ title, icon, showBack, onBackPress }: TopHeaderProps) {
   const navigation = useNavigation();
   const {
     friendRequests,
@@ -69,14 +77,43 @@ export default function TopHeader() {
 
   // Poll friend requests every 10 seconds to keep active notification heart accurate
   useEffect(() => {
+    if (showBack) return;
     fetchFriendRequests();
     const interval = setInterval(() => {
       fetchFriendRequests();
     }, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [showBack]);
 
   const hasRequests = friendRequests.length > 0;
+
+  const BackArrowIcon = () => (
+    <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#DBE8E3" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M19 12H5M12 19l-7-7 7-7" />
+    </Svg>
+  );
+
+  if (showBack) {
+    return (
+      <View style={styles.headerContainer}>
+        <TouchableOpacity
+          onPress={onBackPress || (() => navigation.goBack())}
+          style={styles.backBtn}
+          activeOpacity={0.7}
+        >
+          <BackArrowIcon />
+        </TouchableOpacity>
+
+        <View style={styles.centerContainer}>
+          <Text style={styles.centerTitle} numberOfLines={1}>
+            {icon ? `${icon} ` : ''}{title}
+          </Text>
+        </View>
+
+        <View style={styles.rightSpacer} />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.headerContainer}>
@@ -136,5 +173,28 @@ const styles = StyleSheet.create({
     padding: 8,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(177, 205, 193, 0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  centerContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  centerTitle: {
+    fontFamily: 'PlayfairDisplay-BoldItalic',
+    fontSize: 32,
+    color: '#DBE8E3',
+    textAlign: 'center',
+  },
+  rightSpacer: {
+    width: 40,
   },
 });

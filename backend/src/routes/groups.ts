@@ -60,7 +60,11 @@ router.get('/', async (req: AuthRequest, res: Response) => {
         members: {
           include: { user: true },
         },
-        expenses: true,
+        expenses: {
+          include: {
+            splits: true,
+          },
+        },
       },
     });
 

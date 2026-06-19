@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
 import { Expense } from '../../types';
 
 const formatRecentActivityDate = (dateString: string) => {
@@ -24,16 +24,23 @@ const formatRecentActivityDate = (dateString: string) => {
   return `${dayStr}, ${timeStr}`;
 };
 
+const cleanDescription = (desc: string | null | undefined) => {
+  if (!desc) return '';
+  return desc.replace(/\s*\(Paid by [^)]+\)$/, '').trim();
+};
+
 interface RecentActivityProps {
   expense: Expense;
+  onPress?: () => void;
+  isGroupExpenseView?: boolean;
 }
 
-export default function RecentActivity({ expense }: RecentActivityProps) {
-  const iconText = expense.category?.icon || (expense.merchant || expense.description || 'E')[0].toUpperCase();
+export default function RecentActivity({ expense, onPress, isGroupExpenseView }: RecentActivityProps) {
+  const iconText = expense.category?.icon || (cleanDescription(expense.description) || expense.merchant || 'E')[0].toUpperCase();
   const hasCategory = !!expense.category?.icon;
 
   return (
-    <View style={styles.recentItemCard}>
+    <TouchableOpacity style={styles.recentItemCard} onPress={onPress} activeOpacity={0.75}>
       <View style={styles.recentItemLeft}>
         <View style={styles.recentCircle}>
           <Text style={[styles.recentCircleText, !hasCategory && styles.recentCircleTextLetter]}>
@@ -42,17 +49,17 @@ export default function RecentActivity({ expense }: RecentActivityProps) {
         </View>
         <View style={styles.recentItemMeta}>
           <Text style={styles.recentItemMerchant} numberOfLines={1}>
-            {expense.merchant || expense.description || 'Expense'}
+            {cleanDescription(expense.description) || expense.merchant || 'Expense'}
           </Text>
           <Text style={styles.recentItemDate}>
             {formatRecentActivityDate(expense.date)}
           </Text>
         </View>
       </View>
-      <Text style={styles.recentItemAmount}>
-        -₹{expense.amount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+      <Text style={[styles.recentItemAmount, isGroupExpenseView && styles.recentItemAmountWhite]}>
+        {isGroupExpenseView ? '' : '-'}₹{expense.amount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
       </Text>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -111,5 +118,8 @@ const styles = StyleSheet.create({
     fontSize: 23,
     fontWeight: '700',
     color: '#FF4C4C',
+  },
+  recentItemAmountWhite: {
+    color: '#DBE8E3',
   },
 });

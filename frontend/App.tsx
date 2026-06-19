@@ -11,8 +11,10 @@ import {
 } from '@expo-google-fonts/playfair-display';
 import { BebasNeue_400Regular } from '@expo-google-fonts/bebas-neue';
 
+import './src/store/alertStore'; // Hijacks Alert.alert early
 import AppNavigator from './src/navigation/AppNavigator';
 import GlobalModals from './src/components/GlobalModals';
+import CustomAlertModal from './src/components/CustomAlertModal';
 import { useAuthStore } from './src/store/authStore';
 import api from './src/services/api';
 import { COLORS } from './src/theme/colors';
@@ -62,6 +64,7 @@ export default function App() {
     <SafeAreaProvider style={{ flex: 1 }}>
       <AppNavigator />
       <GlobalModals />
+      <CustomAlertModal />
       <StatusBar style="light" />
     </SafeAreaProvider>
   );

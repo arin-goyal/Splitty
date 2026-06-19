@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   StyleSheet,
   Text,
@@ -12,8 +12,9 @@ import {
   Image,
   useWindowDimensions,
   Animated,
+  RefreshControl,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Polyline, Line, Circle, G } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
@@ -186,12 +187,37 @@ export default function GroupsScreen() {
   // Create Group Modal State
   const [isCreateGroupModalVisible, setIsCreateGroupModalVisible] = useState(false);
 
-  // Load data
-  useEffect(() => {
-    fetchGroups();
-    fetchFriends();
-    fetchFriendRequests();
-  }, []);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      if (viewMode === 'groups') {
+        await fetchGroups();
+      } else {
+        await Promise.all([
+          fetchFriends(),
+          fetchFriendRequests(),
+        ]);
+      }
+    } catch (err) {
+      console.log('Failed to refresh groups/friends:', err);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [viewMode, fetchGroups, fetchFriends, fetchFriendRequests]);
+
+  // Load data & automatic reload on screen focus or viewMode change
+  useFocusEffect(
+    useCallback(() => {
+      if (viewMode === 'groups') {
+        fetchGroups();
+      } else {
+        fetchFriends();
+        fetchFriendRequests();
+      }
+    }, [viewMode, fetchGroups, fetchFriends, fetchFriendRequests])
+  );
 
   const hasRequests = friendRequests.length > 0;
 
@@ -478,13 +504,26 @@ export default function GroupsScreen() {
       {/* Replaces top header with custom view toggle */}
       <View style={[styles.headerContainer, { paddingTop: insets.top + 16 }]}>
         <TouchableOpacity
-          style={styles.headerTitleRow}
+          style={{ alignItems: 'flex-start', paddingBottom: 9 }}
           onPress={() => setIsDropdownVisible(true)}
           activeOpacity={0.7}
         >
-          <Text style={styles.headerTitleText}>{viewMode === 'groups' ? 'Groups' : 'Friends'}</Text>
-          <View style={styles.arrowCircle}>
-            <ArrowIcon />
+          {/* SVG rendered FIRST → paints behind the text */}
+          <Svg width={105} height={9} viewBox="0 0 105 9" fill="none" style={{ position: 'absolute', bottom: 0, left: 0 }}>
+            <Path
+              d="M0.800049 2.09703C19.7097 0.457306 81.2486 0.280279 99.9128 2.09703C105.096 2.60153 105.096 6.51974 99.9128 7.01621C86.2196 8.32787 73.1785 8.328 45.792 7.01621"
+              stroke="#00ee87d7"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </Svg>
+          {/* Text row rendered AFTER → paints on top, shadow casts over SVG */}
+          <View style={styles.headerTitleRow}>
+            <Text style={styles.headerTitleText}>{viewMode === 'groups' ? 'Groups' : 'Friends'}</Text>
+            <View style={styles.arrowCircle}>
+              <ArrowIcon />
+            </View>
           </View>
         </TouchableOpacity>
 
@@ -521,6 +560,14 @@ export default function GroupsScreen() {
             (viewMode === 'groups' ? groups.length === 0 : friends.length === 0) && { flexGrow: 1, justifyContent: 'center', paddingBottom: 90 }
           ]}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#00EE87"
+              colors={["#00EE87"]}
+            />
+          }
         >
           {viewMode === 'groups' ? (
             // Groups List
@@ -879,7 +926,7 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     zIndex: 999,
     backgroundColor: 'transparent',
   },
@@ -898,10 +945,13 @@ const styles = StyleSheet.create({
     transform: [{ translateY: 3 }],
   },
   headerTitleText: {
-    fontFamily: 'PlayfairDisplay-Italic',
+    fontFamily: 'PlayfairDisplay-BoldItalic',
     fontSize: 34,
     color: '#DBE8E3',
     textTransform: 'none',
+    textShadowColor: 'rgba(0, 0, 0, 1)',
+    textShadowOffset: { width: 0, height: 8 },
+    textShadowRadius: 8,
   },
   rightGroup: {
     flexDirection: 'row',

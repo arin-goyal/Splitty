@@ -8,6 +8,7 @@ import {
   Pressable,
 } from 'react-native';
 import Svg, { Path, Line, Circle } from 'react-native-svg';
+import { BlurView } from 'expo-blur';
 import { COLORS } from '../theme/colors';
 import * as Haptics from 'expo-haptics';
 import TabSlider from './TabSlider';
@@ -240,7 +241,14 @@ export default function DateTimePickerModal({
       onRequestClose={onClose}
     >
       <View style={styles.modalOverlay}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose}>
+          <BlurView
+            intensity={20}
+            tint="dark"
+            style={StyleSheet.absoluteFill}
+            experimentalBlurMethod="dimezisBlurView"
+          />
+        </Pressable>
         
         <View style={styles.modalContent}>
           {/* Tab Selector */}
@@ -520,7 +528,7 @@ const styles = StyleSheet.create({
   modalContent: {
     width: '100%',
     maxWidth: 340,
-    backgroundColor: '#071317',
+    backgroundColor: '#071317d3',
     borderWidth: 1,
     borderColor: '#0D242E',
     borderRadius: 32,

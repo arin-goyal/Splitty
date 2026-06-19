@@ -13,9 +13,25 @@ interface ScreenWrapperProps {
   hideHeader?: boolean;
   /** When true, removes top padding so children can scroll behind the header */
   contentUnderHeader?: boolean;
+  /** When true, hides the background dot vector illustration */
+  hideBackground?: boolean;
+  headerTitle?: string;
+  headerIcon?: string;
+  headerShowBack?: boolean;
+  headerOnBackPress?: () => void;
 }
 
-export default function ScreenWrapper({ children, scrollY, hideHeader = false, contentUnderHeader = false }: ScreenWrapperProps) {
+export default function ScreenWrapper({
+  children,
+  scrollY,
+  hideHeader = false,
+  contentUnderHeader = false,
+  hideBackground = false,
+  headerTitle,
+  headerIcon,
+  headerShowBack,
+  headerOnBackPress,
+}: ScreenWrapperProps) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isFocused = useIsFocused();
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -37,10 +53,17 @@ export default function ScreenWrapper({ children, scrollY, hideHeader = false, c
 
   return (
     <View style={styles.container}>
-      <BackgroundVector scrollY={scrollY} />
+      {!hideBackground && <BackgroundVector scrollY={scrollY} />}
       <ScreenEdgeGradients />
       
-      {isAuthenticated && !hideHeader && <TopHeader />}
+      {isAuthenticated && !hideHeader && (
+        <TopHeader
+          title={headerTitle}
+          icon={headerIcon}
+          showBack={headerShowBack}
+          onBackPress={headerOnBackPress}
+        />
+      )}
       
       <Animated.View style={[
         styles.contentContainer,
