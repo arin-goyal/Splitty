@@ -1,11 +1,77 @@
 import express, { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import dns from 'dns';
+import nodemailer from 'nodemailer';
 import { hashPassword, verifyPassword, generateToken } from '../utils/auth';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 
 const router = express.Router(); //Create a router (Express way to group routes)
 const prisma = new PrismaClient(); //Create Prisma Client (Our DB connection)
+
+// Create a mail transporter dynamically using environment variables
+function createMailTransporter() {
+  const host = process.env.SMTP_HOST;
+  const port = Number(process.env.SMTP_PORT) || 587;
+  const secure = process.env.SMTP_SECURE === 'true';
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+
+  if (!user || !pass) {
+    return null;
+  }
+
+  return nodemailer.createTransport({
+    host,
+    port,
+    secure,
+    auth: {
+      user,
+      pass,
+    },
+  });
+}
+
+// Helper: Sends a registration verification OTP email using HTML template
+async function sendVerificationEmail(email: string, name: string, otp: string): Promise<boolean> {
+  const transporter = createMailTransporter();
+  if (!transporter) {
+    console.log('[SMTP] Missing SMTP credentials in .env. Skipping real email send.');
+    return false;
+  }
+
+  const sender = process.env.SMTP_FROM || `"Splitty" <${process.env.SMTP_USER}>`;
+
+  const htmlContent = `
+    <div style="font-family: 'Inter', -apple-system, sans-serif; background-color: #060D10; color: #DBE8E3; padding: 40px 20px; text-align: center; border-radius: 16px; max-width: 500px; margin: 0 auto; border: 1.5px solid #0D242E;">
+      <h2 style="font-size: 26px; font-weight: bold; color: #00EE87; margin-bottom: 20px; font-style: italic;">Splitty 💸</h2>
+      <p style="font-size: 16px; color: #8E9A9D; line-height: 24px; margin-bottom: 30px;">
+        Hello <strong>${name}</strong>,<br>
+        Thank you for creating an account with Splitty! Please use the 6-digit verification code below to complete your registration.
+      </p>
+      <div style="display: inline-block; background-color: rgba(0, 238, 135, 0.08); border: 1.5px solid #00EE87; border-radius: 12px; padding: 16px 36px; margin-bottom: 30px;">
+        <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #00EE87;">${otp}</span>
+      </div>
+      <p style="font-size: 12px; color: #5A7268; margin-top: 10px; line-height: 18px;">
+        This code is valid for 10 minutes. If you did not request this code, please ignore this email.
+      </p>
+    </div>
+  `;
+
+  try {
+    await transporter.sendMail({
+      from: sender,
+      to: email,
+      subject: `Verify your email for Splitty - ${otp}`,
+      text: `Hello ${name}, your Splitty verification code is: ${otp}. This code is valid for 10 minutes.`,
+      html: htmlContent,
+    });
+    console.log(`[SMTP] Verification email sent successfully to ${email}`);
+    return true;
+  } catch (error: any) {
+    console.error('[SMTP] Error sending verification email:', error.message);
+    throw error;
+  }
+}
 
 // Helper: Checks if the domain has mail exchange (MX) or address (A) records
 function checkDomainMX(email: string): Promise<boolean> {
@@ -107,10 +173,21 @@ router.post('/signup/initiate', async (req: Request, res: Response) => {
       expiresAt: Date.now() + 10 * 60 * 1000,
     });
 
-    // Output OTP prominently to the server logs
-    console.log(`\n\x1b[33m[EMAIL VERIFICATION] Verification code for ${email} is: ${otp}\x1b[0m\n`);
+    // Attempt to send real email; falls back to dev logs if SMTP details are missing
+    let emailSent = false;
+    try {
+      emailSent = await sendVerificationEmail(email.trim().toLowerCase(), name.trim(), otp);
+    } catch (mailError: any) {
+      console.error('[SMTP] Failed to send verification email:', mailError.message);
+      return res.status(500).json({ error: `Failed to deliver verification email: ${mailError.message}` });
+    }
 
-    res.status(200).json({ message: 'Verification code sent.' });
+    if (!emailSent) {
+      // Output OTP prominently to the server logs (fallback)
+      console.log(`\n\x1b[33m[EMAIL VERIFICATION] Verification code for ${email} is: ${otp}\x1b[0m\n`);
+    }
+
+    res.status(200).json({ message: emailSent ? 'Verification email sent.' : 'Verification code generated (check server logs).' });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to initiate signup.' });
