@@ -29,6 +29,12 @@
         "projectId": "e9469424-11df-4f49-9c01-1bc2d90968dd"
       }
     },
-    "owner": "arin31"
+    "owner": "arin31",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/e9469424-11df-4f49-9c01-1bc2d90968dd"
+    }
   }
 }
