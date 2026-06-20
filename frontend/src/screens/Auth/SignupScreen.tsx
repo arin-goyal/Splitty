@@ -45,27 +45,7 @@ export default function SignupScreen({ navigation }: Props) {
   // UI States
   const [localLoading, setLocalLoading] = useState(false);
 
-  // OTP Verification States
-  const [isOtpVisible, setIsOtpVisible] = useState(false);
-  const [otpCode, setOtpCode] = useState('');
-  const [otpLoading, setOtpLoading] = useState(false);
-  const [otpError, setOtpError] = useState<string | null>(null);
-  const [resendCooldown, setResendCooldown] = useState(0);
-
   const { setToken, setUser } = useAuthStore();
-
-  // Cooldown timer handler
-  useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (isOtpVisible && resendCooldown > 0) {
-      timer = setInterval(() => {
-        setResendCooldown((prev) => prev - 1);
-      }, 1000);
-    }
-    return () => {
-      if (timer) clearInterval(timer);
-    };
-  }, [isOtpVisible, resendCooldown]);
 
   // Password complexity helpers
   const lengthValid = password.length >= 8;
@@ -76,7 +56,7 @@ export default function SignupScreen({ navigation }: Props) {
 
   const isPasswordSecure = lengthValid && upperValid && lowerValid && digitValid && specialValid;
 
-  const handleInitiateSignup = async () => {
+  const handleSignup = async () => {
     if (!name.trim() || !email.trim() || !password.trim() || !confirmPassword.trim()) {
       Alert.alert('Error', 'All fields are required.');
       return;
@@ -102,75 +82,22 @@ export default function SignupScreen({ navigation }: Props) {
     setLocalLoading(true);
 
     try {
-      // Step 1: Initiate signup, trigger DNS MX check and generate OTP
-      await api.post('/auth/signup/initiate', {
+      // Direct signup without OTP
+      const response = await api.post('/auth/signup', {
         name: name.trim(),
         email: email.trim().toLowerCase(),
         password: password,
-      });
-
-      // Step 2: Open OTP verification modal
-      setOtpCode('');
-      setOtpError(null);
-      setResendCooldown(30); // 30s resend cooldown
-      setIsOtpVisible(true);
-    } catch (err: any) {
-      console.error('Signup initiate error:', err);
-      const message = err.response?.data?.error || 'Failed to initiate signup. Please try again.';
-      Alert.alert('Error', message);
-    } finally {
-      setLocalLoading(false);
-    }
-  };
-
-  const handleVerifyOtp = async () => {
-    if (otpCode.length < 6) {
-      setOtpError('Please enter the 6-digit verification code.');
-      return;
-    }
-
-    setOtpLoading(true);
-    setOtpError(null);
-
-    try {
-      // Step 3: Verify OTP and create the Prisma user account
-      const response = await api.post('/auth/signup/verify', {
-        email: email.trim().toLowerCase(),
-        otp: otpCode,
       });
 
       const { token, user } = response.data;
-      setIsOtpVisible(false);
       setToken(token);
       setUser(user);
     } catch (err: any) {
-      console.error('OTP verify error:', err);
-      const message = err.response?.data?.error || 'Verification failed. Please try again.';
-      setOtpError(message);
+      console.error('Signup error:', err);
+      const message = err.response?.data?.error || 'Failed to sign up. Please try again.';
+      Alert.alert('Error', message);
     } finally {
-      setOtpLoading(false);
-    }
-  };
-
-  const handleResendOtp = async () => {
-    setOtpLoading(true);
-    setOtpError(null);
-
-    try {
-      await api.post('/auth/signup/initiate', {
-        name: name.trim(),
-        email: email.trim().toLowerCase(),
-        password: password,
-      });
-      setOtpCode('');
-      setResendCooldown(30);
-      Alert.alert('Sent', 'A new verification code has been generated.');
-    } catch (err: any) {
-      console.error('Resend OTP error:', err);
-      const message = err.response?.data?.error || 'Failed to resend code.';
-      setOtpError(message);
-    } finally {
-      setOtpLoading(false);
+      setLocalLoading(false);
     }
   };
 
@@ -252,7 +179,7 @@ export default function SignupScreen({ navigation }: Props) {
               title="Sign Up"
               style={styles.button}
               textStyle={styles.buttonText}
-              onPress={handleInitiateSignup}
+              onPress={handleSignup}
               loading={localLoading}
             />
           </View>
@@ -266,76 +193,7 @@ export default function SignupScreen({ navigation }: Props) {
         </View>
       </Animated.ScrollView>
 
-      {/* OTP Verification Modal Overlay */}
-      <Modal
-        visible={isOtpVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setIsOtpVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <BlurView
-            intensity={20}
-            tint="dark"
-            style={StyleSheet.absoluteFill}
-            experimentalBlurMethod="dimezisBlurView"
-          />
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            style={styles.modalKeyboardContainer}
-          >
-            <View style={styles.modalCard}>
-              <Text style={styles.modalTitle}>Verify Email</Text>
-              <Text style={styles.modalSubtitle}>
-                We've sent a 6-digit verification code to {'\n'}
-                <Text style={styles.modalEmailHighlight}>{email.trim().toLowerCase()}</Text>
-              </Text>
 
-              {otpError && (
-                <View style={styles.modalErrorContainer}>
-                  <Text style={styles.modalErrorText}>⚠️ {otpError}</Text>
-                </View>
-              )}
-
-              <TextInput
-                style={styles.otpInput}
-                value={otpCode}
-                onChangeText={(val) => setOtpCode(val.replace(/[^0-9]/g, '').slice(0, 6))}
-                placeholder="000000"
-                placeholderTextColor="rgba(177, 205, 193, 0.15)"
-                keyboardType="number-pad"
-                maxLength={6}
-                autoFocus
-              />
-
-              <Button
-                variant="filled"
-                color="#00EE87"
-                textColor="#060D10"
-                title="Verify & Sign Up"
-                style={styles.modalSubmitBtn}
-                textStyle={styles.modalSubmitText}
-                onPress={handleVerifyOtp}
-                loading={otpLoading}
-              />
-
-              <View style={styles.modalFooter}>
-                {resendCooldown > 0 ? (
-                  <Text style={styles.cooldownText}>Resend code in {resendCooldown}s</Text>
-                ) : (
-                  <TouchableOpacity onPress={handleResendOtp} disabled={otpLoading}>
-                    <Text style={styles.resendText}>Resend Verification Code</Text>
-                  </TouchableOpacity>
-                )}
-
-                <TouchableOpacity onPress={() => setIsOtpVisible(false)} style={styles.modalCancelBtn}>
-                  <Text style={styles.modalCancelText}>Change Email / Back</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </KeyboardAvoidingView>
-        </View>
-      </Modal>
     </KeyboardAvoidingView>
   );
 }
