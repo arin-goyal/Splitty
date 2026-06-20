@@ -75,12 +75,12 @@ async function sendVerificationEmail(email: string, name: string, otp: string): 
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: `HTTP ${response.status}` }));
-        throw new Error(errorData.message || `HTTP ${response.status}`);
+        const errorData = await response.json().catch(() => ({ message: `HTTP ${response.status}` })) as any;
+        throw new Error((errorData && errorData.message) || `HTTP ${response.status}`);
       }
 
-      const data = await response.json();
-      console.log(`[Resend] Verification email sent successfully (ID: ${data.id})`);
+      const data = await response.json() as any;
+      console.log(`[Resend] Verification email sent successfully (ID: ${data && data.id})`);
       return true;
     } catch (error: any) {
       console.error('[Resend] Error sending email via API:', error.message);
@@ -458,6 +458,21 @@ router.put('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
+router.delete('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId!;
+
+    await prisma.user.delete({
+      where: { id: userId },
+    });
+
+    res.json({ message: 'Account deleted successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to delete account' });
   }
 });
 

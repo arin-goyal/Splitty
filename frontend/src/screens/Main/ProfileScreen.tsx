@@ -60,6 +60,14 @@ const LogoutIcon = () => (
   </Svg>
 );
 
+const TrashIcon = () => (
+  <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={COLORS.error} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+    <Path d="M3 6h18" />
+    <Path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+    <Path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+  </Svg>
+);
+
 const BugIcon = ({ size = 20 }: { size?: number }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#FF9500" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
     <Path d="M12 2a10 10 0 0 1 10 10v4a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-4A10 10 0 0 1 12 2z" />
@@ -166,6 +174,36 @@ export default function ProfileScreen() {
   const handleRemovePhoto = () => {
     setAvatar(null);
     setIsAvatarModalVisible(false);
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete Account',
+      'Are you absolutely sure you want to delete your account? This action cannot be undone and will permanently delete all your expenses, groups, and split balances.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Delete Permanently', 
+          style: 'destructive',
+          onPress: executeDeleteAccount 
+        }
+      ]
+    );
+  };
+
+  const executeDeleteAccount = async () => {
+    setIsSaving(true);
+    try {
+      await api.delete('/auth/me');
+      setIsSaving(false);
+      logout();
+      Alert.alert('Deleted', 'Your account has been deleted successfully.');
+    } catch (err: any) {
+      setIsSaving(false);
+      console.error('Failed to delete account:', err);
+      const errMsg = err.response?.data?.error || 'Failed to delete account. Please try again.';
+      Alert.alert('Error', errMsg);
+    }
   };
 
   const renderAvatarContent = () => {
@@ -309,6 +347,18 @@ export default function ProfileScreen() {
             <View style={styles.logoutContent}>
               <LogoutIcon />
               <Text style={styles.logoutText}>Log Out Account</Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Delete Account Action */}
+          <TouchableOpacity
+            style={styles.deleteBtn}
+            onPress={handleDeleteAccount}
+            activeOpacity={0.8}
+          >
+            <View style={styles.deleteContent}>
+              <TrashIcon />
+              <Text style={styles.deleteText}>Delete Account Permanently</Text>
             </View>
           </TouchableOpacity>
         </ScrollView>
@@ -611,6 +661,26 @@ const styles = StyleSheet.create({
   logoutText: {
     color: COLORS.error,
     fontSize: 18,
+    fontWeight: '700',
+  },
+  deleteBtn: {
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 59, 48, 0.25)',
+    borderRadius: 100,
+    height: 56,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  deleteContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  deleteText: {
+    color: COLORS.error,
+    fontSize: 16,
     fontWeight: '700',
   },
   bugBtnFloating: {
