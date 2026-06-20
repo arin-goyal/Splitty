@@ -31,15 +31,9 @@ function createMailTransporter() {
   });
 }
 
-// Helper: Sends a registration verification OTP email using HTML template
+// Helper: Sends a registration verification OTP email using HTML template (supports Resend API & SMTP)
 async function sendVerificationEmail(email: string, name: string, otp: string): Promise<boolean> {
-  const transporter = createMailTransporter();
-  if (!transporter) {
-    console.log('[SMTP] Missing SMTP credentials in .env. Skipping real email send.');
-    return false;
-  }
-
-  const sender = process.env.SMTP_FROM || `"Splitty" <${process.env.SMTP_USER}>`;
+  const resendKey = process.env.RESEND_API_KEY;
 
   const htmlContent = `
     <div style="font-family: 'Inter', -apple-system, sans-serif; background-color: #060D10; color: #DBE8E3; padding: 40px 20px; text-align: center; border-radius: 16px; max-width: 500px; margin: 0 auto; border: 1.5px solid #0D242E;">
@@ -57,12 +51,59 @@ async function sendVerificationEmail(email: string, name: string, otp: string): 
     </div>
   `;
 
+  const subject = `Verify your email for Splitty - ${otp}`;
+  const text = `Hello ${name}, your Splitty verification code is: ${otp}. This code is valid for 10 minutes.`;
+
+  // 1. If Resend API key is configured, use the HTTPS API (works on all Railway plans!)
+  if (resendKey) {
+    const sender = process.env.SMTP_FROM || 'Splitty <onboarding@resend.dev>';
+    console.log(`[Email] Sending verification email via Resend API to ${email}...`);
+    try {
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${resendKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: sender,
+          to: email,
+          subject,
+          text,
+          html: htmlContent,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: `HTTP ${response.status}` }));
+        throw new Error(errorData.message || `HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log(`[Resend] Verification email sent successfully (ID: ${data.id})`);
+      return true;
+    } catch (error: any) {
+      console.error('[Resend] Error sending email via API:', error.message);
+      throw error;
+    }
+  }
+
+  // 2. Fallback to Nodemailer SMTP (blocked on Railway Free/Trial/Hobby plans)
+  const transporter = createMailTransporter();
+  if (!transporter) {
+    console.log('[Email] Missing both RESEND_API_KEY and SMTP credentials. Skipping real email send.');
+    return false;
+  }
+
+  const sender = process.env.SMTP_FROM || `"Splitty" <${process.env.SMTP_USER}>`;
+  console.log(`[SMTP] Sending verification email via SMTP to ${email}...`);
+
   try {
     await transporter.sendMail({
       from: sender,
       to: email,
-      subject: `Verify your email for Splitty - ${otp}`,
-      text: `Hello ${name}, your Splitty verification code is: ${otp}. This code is valid for 10 minutes.`,
+      subject,
+      text,
       html: htmlContent,
     });
     console.log(`[SMTP] Verification email sent successfully to ${email}`);
