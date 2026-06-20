@@ -173,21 +173,24 @@ router.post('/signup/initiate', async (req: Request, res: Response) => {
       expiresAt: Date.now() + 10 * 60 * 1000,
     });
 
-    // Attempt to send real email; falls back to dev logs if SMTP details are missing
-    let emailSent = false;
-    try {
-      emailSent = await sendVerificationEmail(email.trim().toLowerCase(), name.trim(), otp);
-    } catch (mailError: any) {
-      console.error('[SMTP] Failed to send verification email:', mailError.message);
-      return res.status(500).json({ error: `Failed to deliver verification email: ${mailError.message}` });
+    // Always print OTP to the server logs for easy developer access/testing fallback
+    console.log(`\n\x1b[33m[EMAIL VERIFICATION] Verification code for ${email} is: ${otp}\x1b[0m\n`);
+
+    // Fire off the email sending in the background so that SMTP network delays/timeouts
+    // don't hang the HTTP request or cause client-side connection timeouts (499).
+    const hasTransporter = createMailTransporter() !== null;
+    if (hasTransporter) {
+      sendVerificationEmail(email.trim().toLowerCase(), name.trim(), otp)
+        .catch((mailError: any) => {
+          console.error('[SMTP] Background email delivery failed:', mailError.message);
+        });
     }
 
-    if (!emailSent) {
-      // Output OTP prominently to the server logs (fallback)
-      console.log(`\n\x1b[33m[EMAIL VERIFICATION] Verification code for ${email} is: ${otp}\x1b[0m\n`);
-    }
-
-    res.status(200).json({ message: emailSent ? 'Verification email sent.' : 'Verification code generated (check server logs).' });
+    res.status(200).json({ 
+      message: hasTransporter 
+        ? 'Verification email triggered.' 
+        : 'Verification code generated (check server logs).' 
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to initiate signup.' });
