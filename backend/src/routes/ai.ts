@@ -40,7 +40,10 @@ router.post('/scan-receipt', async (req: AuthRequest, res: Response) => {
     const genAI = new GoogleGenerativeAI(apiKey);
     
     // We can use gemini-1.5-flash as the standard fast, multimodal model
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel(
+      { model: 'gemini-1.5-flash' },
+      { apiVersion: 'v1' }
+    );
 
     const prompt = `You are a receipt scanning assistant. Analyze this receipt image and extract:
 1. Merchant name (under "merchant")
