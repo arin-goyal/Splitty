@@ -19,6 +19,10 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    const geminiApiKey = useAuthStore.getState().geminiApiKey;
+    if (geminiApiKey) {
+      config.headers['x-gemini-key'] = geminiApiKey;
+    }
     return config;
   },
   (error) => {

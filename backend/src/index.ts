@@ -8,6 +8,7 @@ import groupExpenseRoutes from './routes/group-expenses';
 import friendRoutes from './routes/friends';
 import budgetsRoutes from './routes/budgets';
 import bugsRoutes from './routes/bugs';
+import aiRoutes from './routes/ai';
 
 dotenv.config();
 
@@ -44,6 +45,7 @@ app.use('/api/group-expenses', groupExpenseRoutes);
 app.use('/api/friends', friendRoutes);
 app.use('/api/budgets', budgetsRoutes);
 app.use('/api/bugs', bugsRoutes);
+app.use('/api/ai', aiRoutes);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date() });

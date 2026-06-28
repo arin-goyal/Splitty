@@ -28,6 +28,8 @@ import GroupListItem from '../../components/GroupListItem';
 import FriendListItem from '../../components/FriendListItem';
 import CreateGroupModal from '../../components/CreateGroupModal';
 import DateTimePickerModal from '../../components/DateTimePickerModal';
+import * as ImagePicker from 'expo-image-picker';
+import api from '../../services/api';
 
 const EMOJI_OPTIONS = ['🍿', '🎮', '✈️', '🎓', '💊', '🍔', '💡', '💅', '🐾', '🏡', '🚕', '🛍️', '🍕', '💰'];
 
@@ -62,6 +64,12 @@ const CalendarIcon = () => (
 const CheckIcon = () => (
   <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#060D10" strokeWidth={3}>
     <Path d="M20 6 9 17l-5-5" />
+  </Svg>
+);
+
+const ArrowIconLeft = () => (
+  <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#B1CDC1" strokeWidth={2.5}>
+    <Path d="m15 19-7-7 7-7" strokeLinecap="round" strokeLinejoin="round" />
   </Svg>
 );
 
@@ -174,6 +182,21 @@ export default function AddExpenseScreen() {
   const [splitMode, setSplitMode] = useState<'equal' | 'unequal'>('equal');
   const [splitsEqualChecked, setSplitsEqualChecked] = useState<Record<string, boolean>>({});
   const [splitsUnequalData, setSplitsUnequalData] = useState<Record<string, string>>({});
+
+  // Digital Receipt State hooks
+  const [isEditingDigitalReceipt, setIsEditingDigitalReceipt] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
+  const [scannedMerchant, setScannedMerchant] = useState('');
+  const [scannedDate, setScannedDate] = useState(() => new Date().toISOString());
+  const [scannedItems, setScannedItems] = useState<any[]>([]);
+  const [scannedTaxes, setScannedTaxes] = useState<number>(0);
+
+  // Item split state hooks
+  const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
+  const [isItemSplitModalVisible, setIsItemSplitModalVisible] = useState(false);
+  const [itemSplitMode, setItemSplitMode] = useState<'equal' | 'unequal'>('equal');
+  const [itemConsumersChecked, setItemConsumersChecked] = useState<Record<string, boolean>>({});
+  const [itemConsumersUnequalData, setItemConsumersUnequalData] = useState<Record<string, string>>({});
 
   // Fetch data on mount
   useEffect(() => {
@@ -335,6 +358,13 @@ export default function AddExpenseScreen() {
       setSplitsEqualChecked({});
       setSplitsUnequalData({});
 
+      setIsEditingDigitalReceipt(false);
+      setIsScanning(false);
+      setScannedMerchant('');
+      setScannedDate(new Date().toISOString());
+      setScannedItems([]);
+      setScannedTaxes(0);
+
       // Clear the param so that subsequent focuses (like via the tab bar) start with a blank form
       navigation.setParams({ editExpense: undefined, relatedExpenses: undefined } as any);
     });
@@ -446,6 +476,76 @@ export default function AddExpenseScreen() {
     setIsAddCategoryVisible(false);
     setNewCategoryName('');
     setNewCategoryIcon('🍿');
+  };
+
+  const handleScanReceipt = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission Required',
+          'We need access to your camera to take a photo of your receipt.'
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: false,
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        return;
+      }
+
+      setIsScanning(true);
+
+      const base64Image = `data:image/jpeg;base64,${result.assets[0].base64}`;
+
+      const response = await api.post('/ai/scan-receipt', {
+        image: base64Image,
+      });
+
+      const parsedReceipt = response.data.data;
+      
+      setScannedMerchant(parsedReceipt.merchant || '');
+      setScannedDate(parsedReceipt.date ? new Date(parsedReceipt.date).toISOString() : new Date().toISOString());
+      setMerchant(parsedReceipt.merchant || '');
+      setDescription(parsedReceipt.merchant ? `${parsedReceipt.merchant} (AI Scan)` : 'AI Receipt Scan');
+      
+      if (categoriesRef.current.length > 0) {
+        setSelectedCategoryId(categoriesRef.current[0].id);
+      }
+      
+      const initialItems = (parsedReceipt.items || []).map((item: any, idx: number) => {
+        const defaultConsumers: Record<string, boolean> = {};
+        participants.forEach(p => {
+          defaultConsumers[p.id] = true;
+        });
+
+        return {
+          id: `item-${idx}-${Date.now()}`,
+          name: item.name || `Item ${idx + 1}`,
+          quantity: item.quantity || 1,
+          price: item.price || 0,
+          splitMode: 'equal',
+          consumers: defaultConsumers,
+          customAmounts: {},
+        };
+      });
+
+      setScannedItems(initialItems);
+      setScannedTaxes(parsedReceipt.taxes || 0);
+      setIsEditingDigitalReceipt(true);
+
+    } catch (err: any) {
+      console.error(err);
+      const msg = err.response?.data?.error || 'Failed to scan receipt. Please try again.';
+      Alert.alert('Scanning Failed', msg);
+    } finally {
+      setIsScanning(false);
+    }
   };
 
   const handleAddCategory = async () => {
@@ -713,15 +813,476 @@ export default function AddExpenseScreen() {
     }, 0);
   }, [payersUnequalData, participants]);
 
+  const handleSaveDigitalReceipt = async (calculatedTotal: number, shares: Record<string, number>) => {
+    if (calculatedTotal <= 0) {
+      Alert.alert('Empty Bill', 'Your bill total must be greater than 0.');
+      return;
+    }
+    if (!selectedCategoryId) {
+      Alert.alert('Category Required', 'Please select a category.');
+      return;
+    }
+
+    if (expenseType === 'personal') {
+      const success = await createExpense({
+        amount: calculatedTotal,
+        categoryId: selectedCategoryId,
+        description: description || scannedMerchant || 'AI Receipt Scan',
+        merchant: scannedMerchant || undefined,
+        date: scannedDate,
+      });
+
+      if (success) {
+        navigation.goBack();
+      } else {
+        Alert.alert('Error', error || 'Failed to save personal expense.');
+      }
+      return;
+    }
+
+    // Group split saving
+    if (!selectedGroup && selectedFriends.length === 0) {
+      Alert.alert('Group or Friends Required', 'Please select a group or friends to split with.');
+      return;
+    }
+
+    let targetGroupId = selectedGroup?.id || '';
+
+    // If ad-hoc friends are selected, create the group first
+    if (!targetGroupId && selectedFriends.length > 0) {
+      const groupName = `Ad-hoc with ${selectedFriends.map(f => f.name.split(' ')[0]).join(', ')}`;
+      const created = await createGroup(groupName, '👥');
+      if (!created) {
+        Alert.alert('Error', 'Failed to create group for friends split.');
+        return;
+      }
+      targetGroupId = created.id;
+      for (const friend of selectedFriends) {
+        await addMemberToGroup(targetGroupId, friend.id);
+      }
+    }
+
+    // Payer selection calculation (reused from standard onSubmit)
+    let payerPayments: { personId: string; amount: number }[] = [];
+    if (payerMode === 'single') {
+      payerPayments = [{ personId: singlePayerId, amount: calculatedTotal }];
+    } else if (payerMode === 'multiple-equal') {
+      const activePayers = participants.filter(p => payersEqualChecked[p.id]);
+      if (activePayers.length === 0) {
+        Alert.alert('Payer Required', 'Please select at least one payer.');
+        return;
+      }
+      const share = calculatedTotal / activePayers.length;
+      payerPayments = activePayers.map(p => ({ personId: p.id, amount: share }));
+    } else {
+      const payments = participants.map(p => {
+        const val = parseFloat(payersUnequalData[p.id] || '0');
+        return { personId: p.id, amount: isNaN(val) ? 0 : val };
+      }).filter(p => p.amount > 0);
+
+      const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+      if (Math.abs(totalPaid - calculatedTotal) > 0.05) {
+        Alert.alert('Invalid Payers', `Total paid must equal ₹${calculatedTotal.toFixed(2)}. Currently ₹${totalPaid.toFixed(2)}.`);
+        return;
+      }
+      payerPayments = payments;
+    }
+
+    // Split configuration shares from our computed `shares` object
+    const splitShares = participants.map(p => ({
+      personId: p.id,
+      amount: shares[p.id] || 0,
+    }));
+
+    try {
+      if (payerPayments.length === 1) {
+        const payer = payerPayments[0];
+        const success = await createGroupExpense({
+          groupId: targetGroupId,
+          amount: payer.amount,
+          categoryId: selectedCategoryId,
+          description: description || scannedMerchant || 'AI Group Receipt Split',
+          merchant: scannedMerchant || undefined,
+          splitType: 'custom',
+          customSplits: splitShares,
+          paidByUserId: payer.personId,
+          date: scannedDate,
+        });
+
+        if (success) {
+          navigation.goBack();
+        } else {
+          Alert.alert('Error', error || 'Failed to create group expense.');
+        }
+      } else {
+        // Multi payer split
+        let count = 0;
+        for (const payer of payerPayments) {
+          const ratio = payer.amount / calculatedTotal;
+          const customSplits = splitShares.map(s => ({
+            personId: s.personId,
+            amount: s.amount * ratio,
+          }));
+
+          const payerName = participants.find(p => p.id === payer.personId)?.name.split(' ')[0] || 'Member';
+          const success = await createGroupExpense({
+            groupId: targetGroupId,
+            amount: payer.amount,
+            categoryId: selectedCategoryId,
+            description: `${description || scannedMerchant || 'AI Group Receipt Split'} (Paid by ${payerName})`,
+            merchant: scannedMerchant || undefined,
+            splitType: 'custom',
+            customSplits,
+            paidByUserId: payer.personId,
+            date: scannedDate,
+          });
+
+          if (success) {
+            count++;
+          }
+        }
+
+        if (count === payerPayments.length) {
+          navigation.goBack();
+        } else {
+          Alert.alert('Partial Success', 'Some expense payments could not be recorded.');
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      Alert.alert('Error', 'An unexpected error occurred while saving the group expense.');
+    }
+  };
+
+  const renderDigitalReceiptEditor = () => {
+    const totalItemsCost = scannedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    const totalBillCalculated = totalItemsCost + (parseFloat(String(scannedTaxes)) || 0);
+
+    // Compute active split shares per person
+    const shares: Record<string, number> = {};
+    scannedItems.forEach((item) => {
+      const itemCost = item.price * item.quantity;
+      if (item.splitMode === 'equal') {
+        const checkedCount = Object.values(item.consumers).filter(Boolean).length;
+        if (checkedCount > 0) {
+          const share = itemCost / checkedCount;
+          participants.forEach((p) => {
+            if (item.consumers[p.id]) {
+              shares[p.id] = (shares[p.id] || 0) + share;
+            }
+          });
+        }
+      } else {
+        participants.forEach((p) => {
+          if (item.consumers[p.id]) {
+            const amt = parseFloat(item.customAmounts[p.id] || '0') || 0;
+            shares[p.id] = (shares[p.id] || 0) + amt;
+          }
+        });
+      }
+    });
+
+    const taxes = parseFloat(String(scannedTaxes)) || 0;
+    if (totalItemsCost > 0 && taxes > 0) {
+      participants.forEach((p) => {
+        const itemShare = shares[p.id] || 0;
+        const taxShare = taxes * (itemShare / totalItemsCost);
+        shares[p.id] = itemShare + taxShare;
+      });
+    }
+
+    return (
+      <View style={{ flex: 1 }}>
+        {/* Receipt Header Actions */}
+        <View style={styles.receiptHeader}>
+          <TouchableOpacity 
+            style={styles.receiptBackBtn} 
+            onPress={() => setIsEditingDigitalReceipt(false)}
+          >
+            <ArrowIconLeft />
+            <Text style={styles.receiptBackBtnText}>Cancel Scan</Text>
+          </TouchableOpacity>
+          <Text style={styles.receiptHeaderTitle}>Digitalized Bill</Text>
+        </View>
+
+        <ScrollView 
+          style={styles.scrollContainer} 
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: 100 }]}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Paper Receipt container */}
+          <View style={styles.paperReceiptCard}>
+            {/* Merchant Name & Date */}
+            <View style={styles.receiptSection}>
+              <TextInput
+                style={styles.receiptMerchantInput}
+                value={scannedMerchant}
+                onChangeText={setScannedMerchant}
+                placeholder="Merchant Name"
+                placeholderTextColor="#5A7268"
+              />
+              <TouchableOpacity
+                style={styles.receiptDateButton}
+                onPress={() => setIsDateTimePickerVisible(true)}
+              >
+                <CalendarIcon />
+                <Text style={styles.receiptDateText}>
+                  {getFormattedDateTime(scannedDate)}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.receiptDashedLine} />
+
+            {/* Items List */}
+            <View style={styles.receiptItemsHeaderRow}>
+              <Text style={styles.receiptSectionTitle}>Items</Text>
+              <TouchableOpacity 
+                style={styles.receiptAddIconBtn}
+                onPress={() => {
+                  const defaultConsumers: Record<string, boolean> = {};
+                  participants.forEach(p => { defaultConsumers[p.id] = true; });
+                  setScannedItems([
+                    ...scannedItems,
+                    {
+                      id: `item-new-${Date.now()}`,
+                      name: '',
+                      quantity: 1,
+                      price: 0,
+                      splitMode: 'equal',
+                      consumers: defaultConsumers,
+                      customAmounts: {},
+                    }
+                  ]);
+                }}
+              >
+                <Text style={styles.receiptAddIconBtnText}>+ Add Item</Text>
+              </TouchableOpacity>
+            </View>
+
+            {scannedItems.length === 0 ? (
+              <Text style={styles.receiptEmptyItemsText}>No items added yet</Text>
+            ) : (
+              scannedItems.map((item, idx) => {
+                const activeCount = Object.values(item.consumers).filter(Boolean).length;
+                let consumersText = 'Not split';
+                if (activeCount > 0) {
+                  if (item.splitMode === 'equal') {
+                    consumersText = activeCount === participants.length 
+                      ? 'Split equally (Everyone)' 
+                      : `Split equally (${activeCount} people)`;
+                  } else {
+                    consumersText = `Split custom (${activeCount} people)`;
+                  }
+                }
+
+                return (
+                  <View key={item.id} style={styles.receiptItemRowContainer}>
+                    <View style={styles.receiptItemMainRow}>
+                      <TextInput
+                        style={[styles.receiptItemInput, { flex: 2 }]}
+                        value={item.name}
+                        onChangeText={(name) => {
+                          const updated = [...scannedItems];
+                          updated[idx].name = name;
+                          setScannedItems(updated);
+                        }}
+                        placeholder="Item Name"
+                        placeholderTextColor="#5A7268"
+                      />
+                      <TextInput
+                        style={[styles.receiptItemInput, { flex: 0.5, textAlign: 'center' }]}
+                        value={String(item.quantity)}
+                        keyboardType="number-pad"
+                        onChangeText={(qty) => {
+                          const updated = [...scannedItems];
+                          updated[idx].quantity = parseInt(qty.replace(/[^0-9]/g, '')) || 0;
+                          setScannedItems(updated);
+                        }}
+                        placeholder="Qty"
+                        placeholderTextColor="#5A7268"
+                      />
+                      <TextInput
+                        style={[styles.receiptItemInput, { flex: 1, textAlign: 'right' }]}
+                        value={item.price === 0 && !String(item.price).includes('.') ? '' : String(item.price)}
+                        keyboardType="decimal-pad"
+                        onChangeText={(price) => {
+                          const cleanPrice = price.replace(/[^0-9.]/g, '');
+                          const updated = [...scannedItems];
+                          updated[idx].price = parseFloat(cleanPrice) || 0;
+                          setScannedItems(updated);
+                        }}
+                        placeholder="Price"
+                        placeholderTextColor="#5A7268"
+                      />
+                      <TouchableOpacity
+                        style={styles.receiptItemDeleteBtn}
+                        onPress={() => {
+                          setScannedItems(scannedItems.filter((_, i) => i !== idx));
+                        }}
+                      >
+                        <Text style={styles.receiptItemDeleteBtnText}>×</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Consumer/Split button (Only if Group) */}
+                    {expenseType === 'group' && (
+                      <TouchableOpacity
+                        style={styles.itemSplitPill}
+                        onPress={() => {
+                          setEditingItemIndex(idx);
+                          setItemSplitMode(item.splitMode || 'equal');
+                          setItemConsumersChecked({ ...item.consumers });
+                          setItemConsumersUnequalData({ ...item.customAmounts });
+                          setIsItemSplitModalVisible(true);
+                        }}
+                      >
+                        <Text style={itemSplitPillText(activeCount)}>🎯 {consumersText}</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                );
+              })
+            )}
+
+            <View style={styles.receiptDashedLine} />
+
+            {/* Taxes and Total block */}
+            <View style={styles.receiptSummaryBlock}>
+              <View style={styles.receiptSummaryRow}>
+                <Text style={styles.receiptSummaryLabel}>Subtotal</Text>
+                <Text style={styles.receiptSummaryValue}>₹{totalItemsCost.toFixed(2)}</Text>
+              </View>
+
+              <View style={styles.receiptSummaryRow}>
+                <Text style={styles.receiptSummaryLabel}>Taxes / Fees</Text>
+                <TextInput
+                  style={styles.receiptTaxesInput}
+                  value={scannedTaxes === 0 && !String(scannedTaxes).includes('.') ? '' : String(scannedTaxes)}
+                  keyboardType="decimal-pad"
+                  onChangeText={(val) => {
+                    const cleanVal = val.replace(/[^0-9.]/g, '');
+                    setScannedTaxes(parseFloat(cleanVal) || 0);
+                  }}
+                  placeholder="0.00"
+                  placeholderTextColor="#5A7268"
+                />
+              </View>
+
+              <View style={styles.receiptSummaryRow}>
+                <Text style={styles.receiptSummaryTotalLabel}>Total Bill</Text>
+                <Text style={styles.receiptSummaryTotalValue}>₹{totalBillCalculated.toFixed(2)}</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Group / Personal slider */}
+          <View style={styles.receiptSliderWrapper}>
+            <TabSlider
+              tabs={['Personal', 'Group']}
+              activeIndex={expenseType === 'personal' ? 0 : 1}
+              onChange={(idx) => {
+                setExpenseType(idx === 0 ? 'personal' : 'group');
+                if (idx === 1 && !selectedGroup && selectedFriends.length === 0) {
+                  setIsGroupFriendsPickerVisible(true);
+                }
+              }}
+              style={{ width: 200, marginBottom: 20 }}
+            />
+          </View>
+
+          {/* If Group, render Group details selectors */}
+          {expenseType === 'group' && (
+            <View style={styles.receiptGroupContainer}>
+              <TouchableOpacity
+                style={styles.groupSelectorRow}
+                onPress={() => setIsGroupFriendsPickerVisible(true)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.groupSelectorLabel}>Split with:</Text>
+                <View style={styles.groupSelectorPill}>
+                  <Text style={styles.groupSelectorText} numberOfLines={1}>
+                    {selectedGroup 
+                      ? `${selectedGroup.icon || '👥'} ${selectedGroup.name}` 
+                      : selectedFriends.length > 0 
+                        ? `👥 ${selectedFriends.length} Friends` 
+                        : 'Select Group / Friends'}
+                  </Text>
+                  <ArrowIcon />
+                </View>
+              </TouchableOpacity>
+
+              {/* Who Paid Selector */}
+              <View style={[styles.splitRow, { marginBottom: 20, justifyContent: 'center' }]}>
+                <Text style={styles.splitLabel}>Paid by </Text>
+                <TouchableOpacity
+                  style={styles.splitPill}
+                  onPress={() => setIsPayerModalVisible(true)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.splitPillText}>{getPayerLabel()}</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Participant splits breakdown */}
+              <Text style={styles.breakdownHeaderTitle}>Calculated Splits (proportional tax included)</Text>
+              <View style={styles.breakdownCard}>
+                {participants.map((p) => {
+                  const share = shares[p.id] || 0;
+                  const itemCostOnly = scannedItems.reduce((sum, item) => {
+                    const cost = item.price * item.quantity;
+                    if (item.splitMode === 'equal') {
+                      const activeCount = Object.values(item.consumers).filter(Boolean).length;
+                      if (item.consumers[p.id] && activeCount > 0) return sum + (cost / activeCount);
+                    } else if (item.consumers[p.id]) {
+                      const customAmt = parseFloat(item.customAmounts[p.id] || '0') || 0;
+                      return sum + customAmt;
+                    }
+                    return sum;
+                  }, 0);
+
+                  return (
+                    <View key={p.id} style={styles.breakdownRow}>
+                      <Text style={styles.breakdownName}>{p.name.split(' ')[0] === user?.name.split(' ')[0] ? 'You' : p.name}</Text>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={styles.breakdownTotalShare}>₹{share.toFixed(2)}</Text>
+                        <Text style={styles.breakdownItemShare}>item: ₹{itemCostOnly.toFixed(2)}</Text>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+
+          {/* Submit Button */}
+          <TouchableOpacity
+            style={styles.receiptSubmitBtn}
+            onPress={() => handleSaveDigitalReceipt(totalBillCalculated, shares)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.receiptSubmitBtnText}>Save Expense</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
+    );
+  };
+
+  const itemSplitPillText = (activeCount: number) => {
+    return activeCount === 0 ? styles.itemSplitPillTextUnassigned : styles.itemSplitPillText;
+  };
+
   return (
     <ScreenWrapper hideHeader={false} hideBackground>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
-
-
-        {/* 1. Fixed Top Card */}
+        {isEditingDigitalReceipt ? (
+          renderDigitalReceiptEditor()
+        ) : (
+          <>
+            {/* 1. Fixed Top Card */}
         <View style={styles.topCardContainer}>
           <TabSlider
             tabs={['Personal', 'Group']}
@@ -816,7 +1377,7 @@ export default function AddExpenseScreen() {
           <View style={styles.actionButtonsRow}>
             <TouchableOpacity
               style={styles.actionPill}
-              onPress={() => Alert.alert('Receipt Scan', 'Scan receipt feature coming soon!')}
+              onPress={handleScanReceipt}
               activeOpacity={0.7}
             >
               <DocumentIcon />
@@ -952,6 +1513,8 @@ export default function AddExpenseScreen() {
             </TouchableOpacity>
           </View>
         </ScrollView>
+        </>
+        )}
       </KeyboardAvoidingView>
 
       {/* Category Picker Modal */}
@@ -1487,12 +2050,199 @@ export default function AddExpenseScreen() {
       <DateTimePickerModal
         visible={isDateTimePickerVisible}
         onClose={() => setIsDateTimePickerVisible(false)}
-        value={date}
+        value={isEditingDigitalReceipt ? scannedDate : date}
         onConfirm={(selectedDateIso) => {
-          setDate(selectedDateIso);
+          if (isEditingDigitalReceipt) {
+            setScannedDate(selectedDateIso);
+          } else {
+            setDate(selectedDateIso);
+          }
           setIsDateTimePickerVisible(false);
         }}
       />
+
+      {/* Item Split Selector Modal */}
+      <Modal
+        visible={isItemSplitModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsItemSplitModalVisible(false)}
+      >
+        <View style={styles.pickerModalOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setIsItemSplitModalVisible(false)} />
+          <View style={[styles.pickerModalContent, { maxHeight: '90%' }]}>
+            <View style={styles.pickerModalHeader}>
+              <Text style={styles.pickerModalTitle} numberOfLines={1}>
+                Split Item: {editingItemIndex !== null ? scannedItems[editingItemIndex]?.name || 'Item' : ''}
+              </Text>
+              <TouchableOpacity onPress={() => setIsItemSplitModalVisible(false)}>
+                <Text style={styles.pickerModalCloseText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+
+            {editingItemIndex !== null && (() => {
+              const currentItem = scannedItems[editingItemIndex];
+              const itemCost = currentItem.price * currentItem.quantity;
+              
+              const customSum = participants.reduce((sum, p) => {
+                if (itemConsumersChecked[p.id]) {
+                  const val = parseFloat(itemConsumersUnequalData[p.id] || '0') || 0;
+                  return sum + val;
+                }
+                return sum;
+              }, 0);
+
+              const validationColor = Math.abs(customSum - itemCost) < 0.05 ? COLORS.success : COLORS.error;
+
+              return (
+                <ScrollView contentContainerStyle={{ gap: 16 }} keyboardShouldPersistTaps="handled">
+                  <Text style={styles.itemSplitTotalLabel}>Item Total: ₹{itemCost.toFixed(2)}</Text>
+
+                  <TabSlider
+                    tabs={['Equally', 'Custom Amount']}
+                    activeIndex={itemSplitMode === 'equal' ? 0 : 1}
+                    onChange={(idx) => {
+                      setItemSplitMode(idx === 0 ? 'equal' : 'unequal');
+                    }}
+                    style={{ width: '100%', marginBottom: 8 }}
+                  />
+
+                  <Text style={styles.sectionHeader}>Consumers</Text>
+                  <View style={{ gap: 10 }}>
+                    {participants.map((p) => {
+                      const isChecked = !!itemConsumersChecked[p.id];
+                      const userAmountStr = itemConsumersUnequalData[p.id] || '';
+                      
+                      const activeCheckedCount = Object.values(itemConsumersChecked).filter(Boolean).length;
+                      const equalShareText = isChecked && activeCheckedCount > 0 
+                        ? `₹${(itemCost / activeCheckedCount).toFixed(2)}` 
+                        : '₹0.00';
+
+                      if (itemSplitMode === 'equal') {
+                        return (
+                          <TouchableOpacity
+                            key={p.id}
+                            style={styles.checkboxRow}
+                            onPress={() => {
+                              const updatedChecked = { ...itemConsumersChecked, [p.id]: !isChecked };
+                              setItemConsumersChecked(updatedChecked);
+                            }}
+                            activeOpacity={0.7}
+                          >
+                            <View style={[styles.checkboxBox, isChecked && styles.checkboxBoxChecked]}>
+                              {isChecked && <CheckIcon />}
+                            </View>
+                            <Text style={styles.checkboxLabelText}>
+                              {p.name.split(' ')[0] === user?.name.split(' ')[0] ? 'You' : p.name}
+                            </Text>
+                            {isChecked && (
+                              <Text style={[styles.payerEqualShareText, { marginLeft: 'auto' }]}>
+                                {equalShareText}
+                              </Text>
+                            )}
+                          </TouchableOpacity>
+                        );
+                      } else {
+                        return (
+                          <View key={p.id} style={styles.inputRow}>
+                            <TouchableOpacity
+                              style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}
+                              onPress={() => {
+                                const updatedChecked = { ...itemConsumersChecked, [p.id]: !isChecked };
+                                setItemConsumersChecked(updatedChecked);
+                                if (isChecked) {
+                                  const updatedAmounts = { ...itemConsumersUnequalData };
+                                  delete updatedAmounts[p.id];
+                                  setItemConsumersUnequalData(updatedAmounts);
+                                }
+                              }}
+                              activeOpacity={0.7}
+                            >
+                              <View style={[styles.checkboxBox, isChecked && styles.checkboxBoxChecked]}>
+                                {isChecked && <CheckIcon />}
+                              </View>
+                              <Text style={styles.checkboxLabelText}>
+                                {p.name.split(' ')[0] === user?.name.split(' ')[0] ? 'You' : p.name}
+                              </Text>
+                            </TouchableOpacity>
+
+                            {isChecked && (
+                              <TextInput
+                                style={styles.rowNumericInput}
+                                value={userAmountStr}
+                                keyboardType="decimal-pad"
+                                placeholder="0.00"
+                                placeholderTextColor="#5A7268"
+                                onChangeText={(text) => {
+                                  const cleanText = text.replace(/[^0-9.]/g, '');
+                                  setItemConsumersUnequalData({
+                                    ...itemConsumersUnequalData,
+                                    [p.id]: cleanText,
+                                  });
+                                }}
+                              />
+                            )}
+                          </View>
+                        );
+                      }
+                    })}
+                  </View>
+
+                  {itemSplitMode === 'unequal' && (
+                    <View style={styles.receiptValidationBox}>
+                      <Text style={[styles.receiptValidationText, { color: validationColor }]}>
+                        Total assigned: ₹{customSum.toFixed(2)} of ₹{itemCost.toFixed(2)}
+                      </Text>
+                      {Math.abs(customSum - itemCost) >= 0.05 && (
+                        <Text style={styles.receiptValidationSubtext}>
+                          Difference: ₹{(itemCost - customSum).toFixed(2)} remaining.
+                        </Text>
+                      )}
+                    </View>
+                  )}
+
+                  <TouchableOpacity
+                    style={[
+                      styles.primaryActionBtn,
+                      itemSplitMode === 'unequal' && Math.abs(customSum - itemCost) >= 0.05 && { opacity: 0.5 }
+                    ]}
+                    disabled={itemSplitMode === 'unequal' && Math.abs(customSum - itemCost) >= 0.05}
+                    onPress={() => {
+                      if (itemSplitMode === 'unequal' && Math.abs(customSum - itemCost) >= 0.05) {
+                        Alert.alert('Incorrect Split Sum', `Please ensure total split sum equals ₹${itemCost.toFixed(2)}`);
+                        return;
+                      }
+                      
+                      const updated = [...scannedItems];
+                      updated[editingItemIndex] = {
+                        ...currentItem,
+                        splitMode: itemSplitMode,
+                        consumers: itemConsumersChecked,
+                        customAmounts: itemConsumersUnequalData,
+                      };
+                      setScannedItems(updated);
+                      setIsItemSplitModalVisible(false);
+                    }}
+                  >
+                    <Text style={styles.primaryActionBtnText}>Apply Split</Text>
+                  </TouchableOpacity>
+                </ScrollView>
+              );
+            })()}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Scanning AI Progress Overlay */}
+      {isScanning && (
+        <Modal transparent animationType="fade">
+          <View style={styles.scanningOverlay}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <Text style={styles.scanningText}>AI is parsing your receipt...</Text>
+            <Text style={styles.scanningSubtext}>Extracting items, prices, and taxes</Text>
+          </View>
+        </Modal>
+      )}
     </ScreenWrapper>
   );
 }
@@ -2100,5 +2850,312 @@ const styles = StyleSheet.create({
   },
   validationError: {
     color: '#FF3B30',
+  },
+
+  // Receipts & Scanner Styles
+  receiptHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    backgroundColor: COLORS.background,
+  },
+  receiptBackBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  receiptBackBtnText: {
+    color: '#B1CDC1',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  receiptHeaderTitle: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#DBE8E3',
+    textAlign: 'center',
+    marginRight: 80,
+  },
+  paperReceiptCard: {
+    backgroundColor: 'rgba(14, 23, 27, 0.65)',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 32,
+    padding: 24,
+    marginHorizontal: 4,
+    marginBottom: 20,
+    boxShadow: '0px 8px 32px rgba(0, 0, 0, 0.4)',
+  },
+  receiptSection: {
+    gap: 12,
+    marginBottom: 16,
+  },
+  receiptMerchantInput: {
+    fontSize: 28,
+    fontFamily: 'PlayfairDisplay-Italic',
+    color: '#DBE8E3',
+    padding: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(177, 205, 193, 0.15)',
+  },
+  receiptDateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  receiptDateText: {
+    color: COLORS.textSecondary,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  receiptDashedLine: {
+    height: 1,
+    borderStyle: 'dashed',
+    borderWidth: 1,
+    borderColor: 'rgba(177, 205, 193, 0.15)',
+    borderRadius: 1,
+    marginVertical: 16,
+  },
+  receiptItemsHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  receiptSectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#5A7268',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  receiptAddIconBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0, 238, 135, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 238, 135, 0.15)',
+  },
+  receiptAddIconBtnText: {
+    color: COLORS.primary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  receiptEmptyItemsText: {
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    paddingVertical: 16,
+    fontStyle: 'italic',
+  },
+  receiptItemRowContainer: {
+    gap: 6,
+    marginBottom: 12,
+    backgroundColor: 'rgba(6, 13, 16, 0.3)',
+    borderRadius: 16,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(28, 41, 46, 0.3)',
+  },
+  receiptItemMainRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  receiptItemInput: {
+    fontSize: 15,
+    color: '#DBE8E3',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    backgroundColor: 'rgba(17, 30, 36, 0.5)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(28, 41, 46, 0.5)',
+  },
+  receiptItemDeleteBtn: {
+    paddingHorizontal: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  receiptItemDeleteBtnText: {
+    fontSize: 24,
+    color: COLORS.error,
+    fontWeight: '300',
+  },
+  itemSplitPill: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(90, 200, 250, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(90, 200, 250, 0.15)',
+    borderRadius: 100,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginTop: 4,
+  },
+  itemSplitPillText: {
+    fontSize: 11,
+    color: '#5AC8FA',
+    fontWeight: '600',
+  },
+  itemSplitPillTextUnassigned: {
+    fontSize: 11,
+    color: COLORS.error,
+    fontWeight: '600',
+  },
+  receiptSummaryBlock: {
+    gap: 12,
+  },
+  receiptSummaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  receiptSummaryLabel: {
+    color: COLORS.textSecondary,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  receiptSummaryValue: {
+    color: '#DBE8E3',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  receiptTaxesInput: {
+    fontSize: 14,
+    color: '#DBE8E3',
+    textAlign: 'right',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    backgroundColor: 'rgba(17, 30, 36, 0.5)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(28, 41, 46, 0.5)',
+    width: 100,
+  },
+  receiptSummaryTotalLabel: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  receiptSummaryTotalValue: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  receiptSliderWrapper: {
+    alignItems: 'center',
+    marginVertical: 16,
+  },
+  receiptGroupContainer: {
+    gap: 16,
+    marginBottom: 24,
+  },
+  breakdownHeaderTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  breakdownCard: {
+    backgroundColor: '#0E171B',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 24,
+    padding: 16,
+    gap: 12,
+  },
+  breakdownRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  breakdownName: {
+    color: '#DBE8E3',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  breakdownTotalShare: {
+    color: COLORS.primary,
+    fontSize: 14,
+    fontWeight: '700',
+    textAlign: 'right',
+  },
+  breakdownItemShare: {
+    color: COLORS.textSecondary,
+    fontSize: 11,
+    textAlign: 'right',
+  },
+  receiptSubmitBtn: {
+    backgroundColor: COLORS.primary,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 8,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  receiptSubmitBtnText: {
+    color: '#060D10',
+    fontSize: 16,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  itemSplitTotalLabel: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#DBE8E3',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  payerEqualShareText: {
+    fontSize: 15,
+    color: COLORS.textSecondary,
+    fontWeight: '600',
+  },
+  receiptValidationBox: {
+    backgroundColor: 'rgba(255, 59, 48, 0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 59, 48, 0.15)',
+    borderRadius: 16,
+    padding: 12,
+    alignItems: 'center',
+    marginVertical: 8,
+  },
+  receiptValidationText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  receiptValidationSubtext: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 4,
+  },
+  scanningOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(3, 7, 9, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 16,
+  },
+  scanningText: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#DBE8E3',
+  },
+  scanningSubtext: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
   },
 });

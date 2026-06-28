@@ -40,6 +40,12 @@ const LockIcon = () => (
   </Svg>
 );
 
+const KeyIcon = () => (
+  <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={COLORS.textSecondary} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+    <Path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
+  </Svg>
+);
+
 const UserIcon = ({ color }: { color: string }) => (
   <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
     <Path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
@@ -81,7 +87,11 @@ const BugIcon = ({ size = 20 }: { size?: number }) => (
 );
 
 export default function ProfileScreen() {
-  const { user, setUser, logout } = useAuthStore();
+  const user = useAuthStore((state) => state.user);
+  const setUser = useAuthStore((state) => state.setUser);
+  const logout = useAuthStore((state) => state.logout);
+  const geminiApiKey = useAuthStore((state) => state.geminiApiKey);
+  const setGeminiApiKey = useAuthStore((state) => state.setGeminiApiKey);
   const insets = useSafeAreaInsets();
 
   const [isEditing, setIsEditing] = useState(false);
@@ -89,8 +99,15 @@ export default function ProfileScreen() {
   const [avatar, setAvatar] = useState<string | null>(user?.avatar || null);
   const [isAvatarModalVisible, setIsAvatarModalVisible] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [isNameFocused, setIsNameFocused] = useState(false);
   const [isBugModalVisible, setIsBugModalVisible] = useState(false);
+
+  const [apiKey, setApiKey] = useState(geminiApiKey || '');
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [isSavingApiKey, setIsSavingApiKey] = useState(false);
+
+  useEffect(() => {
+    setApiKey(geminiApiKey || '');
+  }, [geminiApiKey]);
 
   // Position it exactly 12px above the CustomTabBar capsule
   const bottomPosition = Math.max(2, insets.bottom + 12) + 72 + 12;
@@ -157,6 +174,19 @@ export default function ProfileScreen() {
       Alert.alert('Error', errMsg);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleSaveApiKey = async () => {
+    setIsSavingApiKey(true);
+    try {
+      setGeminiApiKey(apiKey.trim() || null);
+      Alert.alert('Success', 'Gemini API Key updated successfully.');
+    } catch (err) {
+      console.error(err);
+      Alert.alert('Error', 'Failed to save API key.');
+    } finally {
+      setIsSavingApiKey(false);
     }
   };
 
@@ -238,6 +268,7 @@ export default function ProfileScreen() {
         <ScrollView
           contentContainerStyle={styles.scrollContainer}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
           {/* Avatar Section */}
           <View style={styles.avatarSection}>
@@ -292,11 +323,10 @@ export default function ProfileScreen() {
                 style={[
                   styles.inputWrapper,
                   !isEditing && styles.inputWrapperLocked,
-                  isEditing && isNameFocused && styles.inputWrapperFocused,
                 ]}
               >
                 <View style={styles.fieldIcon}>
-                  <UserIcon color={isEditing && isNameFocused ? COLORS.primary : COLORS.textSecondary} />
+                  <UserIcon color={COLORS.textSecondary} />
                 </View>
                 <TextInput
                   style={[styles.textInput, !isEditing && styles.textInputLocked]}
@@ -305,8 +335,6 @@ export default function ProfileScreen() {
                   placeholder="Your Name"
                   placeholderTextColor={COLORS.textSecondary}
                   editable={isEditing}
-                  onFocus={() => setIsNameFocused(true)}
-                  onBlur={() => setIsNameFocused(false)}
                 />
               </View>
             </View>
@@ -336,6 +364,54 @@ export default function ProfileScreen() {
                 )}
               </TouchableOpacity>
             )}
+          </View>
+
+          {/* Gemini API Key configuration card (BYOK) */}
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <Text style={styles.cardTitle}>AI Receipt Scanning</Text>
+            </View>
+            
+            <Text style={styles.infoText}>
+              Add your personal Gemini API Key from Google AI Studio to unlock free receipt scanning. If left empty, it will fall back to the default server key.
+            </Text>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Gemini API Key</Text>
+              <View style={styles.inputWrapper}>
+                <View style={styles.fieldIcon}>
+                  <KeyIcon />
+                </View>
+                <TextInput
+                  style={styles.textInput}
+                  value={apiKey}
+                  onChangeText={setApiKey}
+                  placeholder="Paste your API key here (AI Studio)"
+                  placeholderTextColor={COLORS.textSecondary}
+                  secureTextEntry={!showApiKey}
+                />
+                <TouchableOpacity
+                  onPress={() => setShowApiKey(!showApiKey)}
+                  style={styles.showHideBtn}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.showHideText}>{showApiKey ? 'Hide' : 'Show'}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.saveBtn}
+              onPress={handleSaveApiKey}
+              disabled={isSavingApiKey}
+              activeOpacity={0.8}
+            >
+              {isSavingApiKey ? (
+                <ActivityIndicator size="small" color="#060D10" />
+              ) : (
+                <Text style={styles.saveBtnText}>Save API Key</Text>
+              )}
+            </TouchableOpacity>
           </View>
 
           {/* Log Out Actions */}
@@ -631,6 +707,22 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingHorizontal: 8,
     borderRadius: 100,
+  },
+  infoText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    lineHeight: 18,
+    marginBottom: 8,
+  },
+  showHideBtn: {
+    paddingHorizontal: 12,
+    justifyContent: 'center',
+    height: '100%',
+  },
+  showHideText: {
+    color: COLORS.primary,
+    fontSize: 13,
+    fontWeight: '600',
   },
   saveBtn: {
     backgroundColor: COLORS.primary,

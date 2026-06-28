@@ -9,9 +9,11 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
+  geminiApiKey: string | null;
   setToken: (token: string | null) => void;
   setUser: (user: User | null) => void;
   setError: (error: string | null) => void;
+  setGeminiApiKey: (key: string | null) => void;
   logout: () => void;
 }
 
@@ -23,12 +25,14 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       isLoading: false,
       error: null,
+      geminiApiKey: null,
 
       setToken: (token) => set({ token, isAuthenticated: !!token }),
       setUser: (user) => set({ user }),
       setError: (error) => set({ error }),
+      setGeminiApiKey: (geminiApiKey) => set({ geminiApiKey }),
       logout: () => {
-        set({ token: null, user: null, isAuthenticated: false, error: null });
+        set({ token: null, user: null, isAuthenticated: false, error: null, geminiApiKey: null });
       },
     }),
     {
@@ -38,6 +42,7 @@ export const useAuthStore = create<AuthState>()(
         token: state.token,
         user: state.user,
         isAuthenticated: state.isAuthenticated,
+        geminiApiKey: state.geminiApiKey,
       }),
     }
   )
