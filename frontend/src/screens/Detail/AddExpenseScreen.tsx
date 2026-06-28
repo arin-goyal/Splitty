@@ -1043,173 +1043,7 @@ export default function AddExpenseScreen() {
           contentContainerStyle={[styles.scrollContent, { paddingBottom: 100 }]}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Paper Receipt container */}
-          <View style={styles.paperReceiptCard}>
-            {/* Merchant Name & Date */}
-            <View style={styles.receiptSection}>
-              <TextInput
-                style={styles.receiptMerchantInput}
-                value={scannedMerchant}
-                onChangeText={setScannedMerchant}
-                placeholder="Merchant Name"
-                placeholderTextColor="#5A7268"
-              />
-              <TouchableOpacity
-                style={styles.receiptDateButton}
-                onPress={() => setIsDateTimePickerVisible(true)}
-              >
-                <CalendarIcon />
-                <Text style={styles.receiptDateText}>
-                  {getFormattedDateTime(scannedDate)}
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.receiptDashedLine} />
-
-            {/* Items List */}
-            <View style={styles.receiptItemsHeaderRow}>
-              <Text style={styles.receiptSectionTitle}>Items</Text>
-              <TouchableOpacity 
-                style={styles.receiptAddIconBtn}
-                onPress={() => {
-                  const defaultConsumers: Record<string, boolean> = {};
-                  participants.forEach(p => { defaultConsumers[p.id] = true; });
-                  setScannedItems([
-                    ...scannedItems,
-                    {
-                      id: `item-new-${Date.now()}`,
-                      name: '',
-                      quantity: 1,
-                      price: 0,
-                      splitMode: 'equal',
-                      consumers: defaultConsumers,
-                      customAmounts: {},
-                    }
-                  ]);
-                }}
-              >
-                <Text style={styles.receiptAddIconBtnText}>+ Add Item</Text>
-              </TouchableOpacity>
-            </View>
-
-            {scannedItems.length === 0 ? (
-              <Text style={styles.receiptEmptyItemsText}>No items added yet</Text>
-            ) : (
-              scannedItems.map((item, idx) => {
-                const activeCount = Object.values(item.consumers).filter(Boolean).length;
-                let consumersText = 'Not split';
-                if (activeCount > 0) {
-                  if (item.splitMode === 'equal') {
-                    consumersText = activeCount === participants.length 
-                      ? 'Split equally (Everyone)' 
-                      : `Split equally (${activeCount} people)`;
-                  } else {
-                    consumersText = `Split custom (${activeCount} people)`;
-                  }
-                }
-
-                return (
-                  <View key={item.id} style={styles.receiptItemRowContainer}>
-                    <View style={styles.receiptItemMainRow}>
-                      <TextInput
-                        style={[styles.receiptItemInput, { flex: 2 }]}
-                        value={item.name}
-                        onChangeText={(name) => {
-                          const updated = [...scannedItems];
-                          updated[idx].name = name;
-                          setScannedItems(updated);
-                        }}
-                        placeholder="Item Name"
-                        placeholderTextColor="#5A7268"
-                      />
-                      <TextInput
-                        style={[styles.receiptItemInput, { flex: 0.5, textAlign: 'center' }]}
-                        value={String(item.quantity)}
-                        keyboardType="number-pad"
-                        onChangeText={(qty) => {
-                          const updated = [...scannedItems];
-                          updated[idx].quantity = parseInt(qty.replace(/[^0-9]/g, '')) || 0;
-                          setScannedItems(updated);
-                        }}
-                        placeholder="Qty"
-                        placeholderTextColor="#5A7268"
-                      />
-                      <TextInput
-                        style={[styles.receiptItemInput, { flex: 1, textAlign: 'right' }]}
-                        value={item.price === 0 && !String(item.price).includes('.') ? '' : String(item.price)}
-                        keyboardType="decimal-pad"
-                        onChangeText={(price) => {
-                          const cleanPrice = price.replace(/[^0-9.]/g, '');
-                          const updated = [...scannedItems];
-                          updated[idx].price = parseFloat(cleanPrice) || 0;
-                          setScannedItems(updated);
-                        }}
-                        placeholder="Price"
-                        placeholderTextColor="#5A7268"
-                      />
-                      <TouchableOpacity
-                        style={styles.receiptItemDeleteBtn}
-                        onPress={() => {
-                          setScannedItems(scannedItems.filter((_, i) => i !== idx));
-                        }}
-                      >
-                        <Text style={styles.receiptItemDeleteBtnText}>×</Text>
-                      </TouchableOpacity>
-                    </View>
-
-                    {/* Consumer/Split button (Only if Group) */}
-                    {expenseType === 'group' && (
-                      <TouchableOpacity
-                        style={styles.itemSplitPill}
-                        onPress={() => {
-                          setEditingItemIndex(idx);
-                          setItemSplitMode(item.splitMode || 'equal');
-                          setItemConsumersChecked({ ...item.consumers });
-                          setItemConsumersUnequalData({ ...item.customAmounts });
-                          setIsItemSplitModalVisible(true);
-                        }}
-                      >
-                        <Text style={itemSplitPillText(activeCount)}>🎯 {consumersText}</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                );
-              })
-            )}
-
-            <View style={styles.receiptDashedLine} />
-
-            {/* Taxes and Total block */}
-            <View style={styles.receiptSummaryBlock}>
-              <View style={styles.receiptSummaryRow}>
-                <Text style={styles.receiptSummaryLabel}>Subtotal</Text>
-                <Text style={styles.receiptSummaryValue}>₹{totalItemsCost.toFixed(2)}</Text>
-              </View>
-
-              <View style={styles.receiptSummaryRow}>
-                <Text style={styles.receiptSummaryLabel}>Taxes / Fees</Text>
-                <TextInput
-                  style={styles.receiptTaxesInput}
-                  value={scannedTaxes === 0 && !String(scannedTaxes).includes('.') ? '' : String(scannedTaxes)}
-                  keyboardType="decimal-pad"
-                  onChangeText={(val) => {
-                    const cleanVal = val.replace(/[^0-9.]/g, '');
-                    setScannedTaxes(parseFloat(cleanVal) || 0);
-                  }}
-                  placeholder="0.00"
-                  placeholderTextColor="#5A7268"
-                />
-              </View>
-
-              <View style={styles.receiptSummaryRow}>
-                <Text style={styles.receiptSummaryTotalLabel}>Total Bill</Text>
-                <Text style={styles.receiptSummaryTotalValue}>₹{totalBillCalculated.toFixed(2)}</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Group / Personal slider */}
+          {/* Group / Personal Tab Slider (Centered above the card) */}
           <View style={styles.receiptSliderWrapper}>
             <TabSlider
               tabs={['Personal', 'Group']}
@@ -1224,9 +1058,179 @@ export default function AddExpenseScreen() {
             />
           </View>
 
-          {/* If Group, render Group details selectors */}
+          {/* Premium Dark Scanned Receipt Card */}
+          <View style={styles.darkMockupCard}>
+            {/* Centered Merchant Name & Date/Time subtitle */}
+            <View style={styles.mockupHeaderSection}>
+              <TextInput
+                style={styles.mockupMerchantInput}
+                value={scannedMerchant}
+                onChangeText={setScannedMerchant}
+                placeholder="MERCHANT NAME"
+                placeholderTextColor="#5A7268"
+                autoCapitalize="characters"
+              />
+              <TouchableOpacity
+                style={styles.mockupDateButton}
+                onPress={() => setIsDateTimePickerVisible(true)}
+              >
+                <Text style={styles.mockupDateText}>
+                  {getFormattedDateTime(scannedDate)}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Table Headers */}
+            <View style={styles.mockupTableHeader}>
+              <Text style={[styles.mockupTableHeaderText, { flex: 2 }]}>Item</Text>
+              <Text style={[styles.mockupTableHeaderText, { flex: 1, textAlign: 'right' }]}>Price</Text>
+              {expenseType === 'group' && (
+                <Text style={[styles.mockupTableHeaderText, { flex: 1.2, textAlign: 'right' }]}>Consumer</Text>
+              )}
+            </View>
+
+            {/* Table Rows (Items List) */}
+            {scannedItems.length === 0 ? (
+              <Text style={styles.receiptEmptyItemsText}>No items added yet</Text>
+            ) : (
+              scannedItems.map((item, idx) => {
+                const activeCount = Object.values(item.consumers).filter(Boolean).length;
+                let consumersText = 'Select';
+                if (activeCount > 0) {
+                  if (item.splitMode === 'equal') {
+                    consumersText = activeCount === participants.length 
+                      ? 'Everyone' 
+                      : `${activeCount} People`;
+                  } else {
+                    consumersText = `${activeCount} Custom`;
+                  }
+                }
+
+                return (
+                  <View key={item.id} style={styles.mockupItemRow}>
+                    {/* Item Name Input (flex 1.4) */}
+                    <TextInput
+                      style={styles.mockupItemNameInput}
+                      value={item.name}
+                      onChangeText={(name) => {
+                        const updated = [...scannedItems];
+                        updated[idx].name = name;
+                        setScannedItems(updated);
+                      }}
+                      placeholder="Item Name"
+                      placeholderTextColor="#5A7268"
+                    />
+
+                    {/* Quantity Input (flex 0.4) styled inline as "1x" */}
+                    <View style={styles.mockupQtyWrapper}>
+                      <TextInput
+                        style={styles.mockupQtyInput}
+                        value={String(item.quantity)}
+                        keyboardType="number-pad"
+                        onChangeText={(qty) => {
+                          const updated = [...scannedItems];
+                          updated[idx].quantity = parseInt(qty.replace(/[^0-9]/g, '')) || 0;
+                          setScannedItems(updated);
+                        }}
+                        placeholder="1"
+                        placeholderTextColor="#5A7268"
+                      />
+                      <Text style={styles.mockupQtySuffix}>x</Text>
+                    </View>
+
+                    {/* Price Input (flex 0.8) */}
+                    <View style={styles.mockupPriceWrapper}>
+                      <Text style={styles.mockupPriceCurrency}>₹</Text>
+                      <TextInput
+                        style={styles.mockupItemPriceInput}
+                        value={item.price === 0 && !String(item.price).includes('.') ? '' : String(item.price)}
+                        keyboardType="decimal-pad"
+                        onChangeText={(price) => {
+                          const cleanPrice = price.replace(/[^0-9.]/g, '');
+                          const updated = [...scannedItems];
+                          updated[idx].price = parseFloat(cleanPrice) || 0;
+                          setScannedItems(updated);
+                        }}
+                        placeholder="0"
+                        placeholderTextColor="#5A7268"
+                      />
+                    </View>
+
+                    {/* Consumer Dropdown Selector (Only if Group mode) */}
+                    {expenseType === 'group' && (
+                      <TouchableOpacity
+                        style={styles.mockupDropdownPill}
+                        onPress={() => {
+                          setEditingItemIndex(idx);
+                          setItemSplitMode(item.splitMode || 'equal');
+                          setItemConsumersChecked({ ...item.consumers });
+                          setItemConsumersUnequalData({ ...item.customAmounts });
+                          setIsItemSplitModalVisible(true);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.mockupDropdownText} numberOfLines={1}>
+                          {consumersText}
+                        </Text>
+                        <ArrowIcon />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                );
+              })
+            )}
+
+            {/* TAX Row */}
+            <View style={styles.mockupSummaryRow}>
+              <Text style={[styles.mockupSummaryLabel, { flex: 2 }]}>TAX</Text>
+              <View style={[styles.mockupPriceWrapper, { flex: 1, justifyContent: 'flex-end' }]}>
+                <Text style={styles.mockupSummaryCurrency}>₹</Text>
+                <TextInput
+                  style={styles.mockupSummaryTaxesInput}
+                  value={scannedTaxes === 0 && !String(scannedTaxes).includes('.') ? '' : String(scannedTaxes)}
+                  keyboardType="decimal-pad"
+                  onChangeText={(val) => {
+                    const cleanVal = val.replace(/[^0-9.]/g, '');
+                    setScannedTaxes(parseFloat(cleanVal) || 0);
+                  }}
+                  placeholder="0"
+                  placeholderTextColor="#5A7268"
+                />
+              </View>
+              {expenseType === 'group' && <View style={{ flex: 1.2 }} />}
+            </View>
+
+            {/* Total Row */}
+            <View style={[styles.mockupSummaryRow, { marginTop: 12 }]}>
+              <Text style={[styles.mockupSummaryTotalLabel, { flex: 1.5 }]}>Total</Text>
+              <Text style={[styles.mockupSummaryTotalValue, { flex: 1, textAlign: 'right' }]}>
+                ₹{totalBillCalculated.toFixed(0)}
+              </Text>
+              {expenseType === 'group' && (
+                <TouchableOpacity
+                  style={[styles.mockupDropdownPill, { flex: 1.2, marginLeft: 12 }]}
+                  onPress={() => setIsPayerModalVisible(true)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.mockupDropdownText} numberOfLines={1}>
+                    {getPayerLabel()}
+                  </Text>
+                  <ArrowIcon />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+
+          {/* Group details/splits (If Group mode) */}
           {expenseType === 'group' && (
-            <View style={styles.receiptGroupContainer}>
+            <View style={{ width: '100%', marginTop: 8, alignItems: 'center' }}>
+              <Text style={styles.mockupTaxSplitInfoText}>ℹ️ Tax will be split accordingly</Text>
+            </View>
+          )}
+
+          {/* Split with Picker (Only if Group mode) */}
+          {expenseType === 'group' && (
+            <View style={{ width: '100%', marginTop: 24 }}>
               <TouchableOpacity
                 style={styles.groupSelectorRow}
                 onPress={() => setIsGroupFriendsPickerVisible(true)}
@@ -1244,57 +1248,19 @@ export default function AddExpenseScreen() {
                   <ArrowIcon />
                 </View>
               </TouchableOpacity>
-
-              {/* Who Paid Selector */}
-              <View style={[styles.splitRow, { marginBottom: 20, justifyContent: 'center' }]}>
-                <Text style={styles.splitLabel}>Paid by </Text>
-                <TouchableOpacity
-                  style={styles.splitPill}
-                  onPress={() => setIsPayerModalVisible(true)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.splitPillText}>{getPayerLabel()}</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Participant splits breakdown */}
-              <Text style={styles.breakdownHeaderTitle}>Calculated Splits (proportional tax included)</Text>
-              <View style={styles.breakdownCard}>
-                {participants.map((p) => {
-                  const share = shares[p.id] || 0;
-                  const itemCostOnly = scannedItems.reduce((sum, item) => {
-                    const cost = item.price * item.quantity;
-                    if (item.splitMode === 'equal') {
-                      const activeCount = Object.values(item.consumers).filter(Boolean).length;
-                      if (item.consumers[p.id] && activeCount > 0) return sum + (cost / activeCount);
-                    } else if (item.consumers[p.id]) {
-                      const customAmt = parseFloat(item.customAmounts[p.id] || '0') || 0;
-                      return sum + customAmt;
-                    }
-                    return sum;
-                  }, 0);
-
-                  return (
-                    <View key={p.id} style={styles.breakdownRow}>
-                      <Text style={styles.breakdownName}>{p.name.split(' ')[0] === user?.name.split(' ')[0] ? 'You' : p.name}</Text>
-                      <View style={{ alignItems: 'flex-end' }}>
-                        <Text style={styles.breakdownTotalShare}>₹{share.toFixed(2)}</Text>
-                        <Text style={styles.breakdownItemShare}>item: ₹{itemCostOnly.toFixed(2)}</Text>
-                      </View>
-                    </View>
-                  );
-                })}
-              </View>
             </View>
           )}
 
-          {/* Submit Button */}
+          {/* Large sage-green "Add expense ✓" button at bottom */}
           <TouchableOpacity
-            style={styles.receiptSubmitBtn}
+            style={styles.mockupAddExpenseBtn}
             onPress={() => handleSaveDigitalReceipt(totalBillCalculated, shares)}
-            activeOpacity={0.8}
+            activeOpacity={0.85}
           >
-            <Text style={styles.receiptSubmitBtnText}>Save Expense</Text>
+            <Text style={styles.mockupAddExpenseBtnText}>Add expense</Text>
+            <View style={styles.mockupAddExpenseCheckIcon}>
+              <CheckIcon />
+            </View>
           </TouchableOpacity>
         </ScrollView>
       </View>
@@ -3174,6 +3140,202 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textSecondary,
     marginTop: 4,
+  },
+  
+  /* Mockup Layout Styles */
+  darkMockupCard: {
+    backgroundColor: '#091215',
+    borderWidth: 1,
+    borderColor: '#14282F',
+    borderRadius: 24,
+    padding: 20,
+    marginHorizontal: 4,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  mockupHeaderSection: {
+    alignItems: 'center',
+    marginBottom: 24,
+    gap: 6,
+  },
+  mockupMerchantInput: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#E0F0E9',
+    textAlign: 'center',
+    width: '100%',
+    padding: 0,
+    letterSpacing: 1,
+  },
+  mockupDateButton: {
+    paddingVertical: 4,
+  },
+  mockupDateText: {
+    color: '#8BA398',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  mockupTableHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#14282F',
+    marginBottom: 12,
+  },
+  mockupTableHeaderText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#5A7268',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  mockupItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(20, 40, 47, 0.4)',
+  },
+  mockupItemNameInput: {
+    flex: 1.4,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#E0F0E9',
+    padding: 0,
+  },
+  mockupQtyWrapper: {
+    flex: 0.4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#11232A',
+    borderRadius: 8,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    marginRight: 8,
+  },
+  mockupQtyInput: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#B1CDC1',
+    textAlign: 'center',
+    padding: 0,
+    minWidth: 12,
+  },
+  mockupQtySuffix: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#B1CDC1',
+  },
+  mockupPriceWrapper: {
+    flex: 0.8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  mockupPriceCurrency: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#E0F0E9',
+    marginRight: 1,
+  },
+  mockupItemPriceInput: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#E0F0E9',
+    textAlign: 'right',
+    padding: 0,
+    minWidth: 32,
+  },
+  mockupDropdownPill: {
+    flex: 1.2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#11232A',
+    borderWidth: 1,
+    borderColor: '#1C3641',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginLeft: 12,
+  },
+  mockupDropdownText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#E0F0E9',
+    flex: 1,
+    marginRight: 4,
+  },
+  mockupSummaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  mockupSummaryLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#8BA398',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  mockupSummaryCurrency: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#8BA398',
+    marginRight: 1,
+  },
+  mockupSummaryTaxesInput: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#E0F0E9',
+    textAlign: 'right',
+    padding: 0,
+    minWidth: 40,
+  },
+  mockupSummaryTotalLabel: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#E0F0E9',
+  },
+  mockupSummaryTotalValue: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#E0F0E9',
+  },
+  mockupTaxSplitInfoText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#5A7268',
+    textAlign: 'center',
+  },
+  mockupAddExpenseBtn: {
+    backgroundColor: '#B1CDC1',
+    height: 56,
+    borderRadius: 28,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 24,
+    gap: 8,
+    shadowColor: '#B1CDC1',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  mockupAddExpenseBtnText: {
+    color: '#060D10',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  mockupAddExpenseCheckIcon: {
+    transform: [{ scale: 0.9 }],
   },
   scanningOverlay: {
     flex: 1,
