@@ -478,22 +478,34 @@ export default function AddExpenseScreen() {
     setNewCategoryIcon('🍿');
   };
 
-  const handleScanReceipt = async () => {
+  const processReceiptScan = async (source: 'camera' | 'library') => {
     try {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      let status;
+      if (source === 'camera') {
+        const camPermission = await ImagePicker.requestCameraPermissionsAsync();
+        status = camPermission.status;
+      } else {
+        const libPermission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        status = libPermission.status;
+      }
+
       if (status !== 'granted') {
         Alert.alert(
           'Permission Required',
-          'We need access to your camera to take a photo of your receipt.'
+          `We need access to your ${source === 'camera' ? 'camera' : 'photo library'} to scan the receipt.`
         );
         return;
       }
 
-      const result = await ImagePicker.launchCameraAsync({
+      const options = {
         allowsEditing: false,
-        quality: 0.8,
+        quality: 0.5,
         base64: true,
-      });
+      };
+
+      const result = source === 'camera'
+        ? await ImagePicker.launchCameraAsync(options)
+        : await ImagePicker.launchImageLibraryAsync(options);
 
       if (result.canceled || !result.assets || result.assets.length === 0) {
         return;
@@ -546,6 +558,27 @@ export default function AddExpenseScreen() {
     } finally {
       setIsScanning(false);
     }
+  };
+
+  const handleScanReceipt = async () => {
+    Alert.alert(
+      'Scan Receipt',
+      'Choose a source for your receipt image',
+      [
+        {
+          text: 'Take Photo',
+          onPress: () => processReceiptScan('camera'),
+        },
+        {
+          text: 'Choose from Gallery',
+          onPress: () => processReceiptScan('library'),
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ]
+    );
   };
 
   const handleAddCategory = async () => {
